@@ -1,0 +1,40 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Testing
+*.profraw
+*.gcda
+*.gcno
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# Config (you might want to keep config examples)
+# config.toml
+# .dotrest/
+
+# OS
+Thumbs.db
+.Spotlight-V100
+.Trashes
