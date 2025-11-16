@@ -8,15 +8,20 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use std::{
+    collections::{HashMap, HashSet},
+    fs::OpenOptions,
+};
 
 #[derive(Debug, Clone)]
 struct ApiEndpoint {
     method: String,
     path: String,
     summary: Option<String>,
+    tags: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -36,6 +41,7 @@ struct PathItem {
 #[derive(Deserialize)]
 struct Operation {
     summary: Option<String>,
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,10 +54,26 @@ enum LoadingState {
 }
 
 #[derive(Debug, Clone)]
+enum RenderItem {
+    GroupHeader {
+        name: String,
+        count: usize,
+        expanded: bool,
+    },
+    Endpoint {
+        endpoint: ApiEndpoint,
+    },
+}
+
+#[derive(Debug, Clone)]
 struct AppState {
-    endpoints: Vec<ApiEndpoint>,
+    endpoints: Vec<ApiEndpoint>, // original flat list
     loading_state: LoadingState,
     retry_count: u32,
+    grouped_endpoints: HashMap<String, Vec<ApiEndpoint>>, // Grouped by tag/controllers
+    view_mode: ViewMode,
+    expanded_groups: HashSet<String>, // which groups are expanded
+    render_items: Vec<RenderItem>,    // flattened list for rendering
 }
 
 impl Default for AppState {
@@ -60,8 +82,18 @@ impl Default for AppState {
             endpoints: Vec::new(),
             loading_state: LoadingState::Idle,
             retry_count: 0,
+            grouped_endpoints: HashMap::new(),
+            view_mode: ViewMode::Grouped,
+            expanded_groups: HashSet::new(),
+            render_items: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ViewMode {
+    Flat,    // show all endpoints in a flat list
+    Grouped, // show grouped by controllers/tags with expandable
 }
 
 #[derive(Debug)]
@@ -136,9 +168,30 @@ impl App {
                             // Parse endpoints
                             let endpoints = parse_swagger_spec(spec);
 
+                            let mut grouped: HashMap<String, Vec<ApiEndpoint>> = HashMap::new();
+
+                            for endpoint in &endpoints {
+                                if endpoint.tags.is_empty() {
+                                    // no tags? add to 'Other' group
+                                    grouped
+                                        .entry("Other".to_string())
+                                        .or_default()
+                                        .push(endpoint.clone());
+                                } else {
+                                    // has tags? add to each tag group
+                                    for tag in &endpoint.tags {
+                                        grouped
+                                            .entry(tag.clone())
+                                            .or_default()
+                                            .push(endpoint.clone());
+                                    }
+                                }
+                            }
+
                             // Step 3: Complete
                             if let Ok(mut s) = state.write() {
                                 s.endpoints = endpoints;
+                                s.grouped_endpoints = grouped;
                                 s.loading_state = LoadingState::Complete;
                                 s.retry_count = 0;
                             }
@@ -243,54 +296,177 @@ impl App {
                         .block(Block::default().borders(Borders::ALL).title("Endpoints"));
                     frame.render_widget(empty, body_chunks[0]);
                 } else {
-                    let items: Vec<ListItem> = state
-                        .endpoints
-                        .iter()
-                        .map(|endpoint| {
-                            let method_color = match endpoint.method.as_str() {
-                                "GET" => Color::Green,
-                                "POST" => Color::Blue,
-                                "PUT" => Color::Yellow,
-                                "DELETE" => Color::Red,
-                                "PATCH" => Color::Cyan,
-                                _ => Color::White,
-                            };
+                    match &state.view_mode {
+                        ViewMode::Flat => {
+                            let items: Vec<ListItem> = state
+                                .endpoints
+                                .iter()
+                                .map(|endpoint| {
+                                    let method_color = match endpoint.method.as_str() {
+                                        "GET" => Color::Green,
+                                        "POST" => Color::Blue,
+                                        "PUT" => Color::Yellow,
+                                        "DELETE" => Color::Red,
+                                        "PATCH" => Color::Cyan,
+                                        _ => Color::White,
+                                    };
 
-                            let line = Line::from(vec![
-                                Span::styled(
-                                    format!("{:7}", endpoint.method),
+                                    let line = Line::from(vec![
+                                        Span::styled(
+                                            format!("{:7}", endpoint.method),
+                                            Style::default()
+                                                .fg(method_color)
+                                                .add_modifier(Modifier::BOLD),
+                                        ),
+                                        Span::raw(" "),
+                                        Span::raw(&endpoint.path),
+                                    ]);
+
+                                    ListItem::new(line)
+                                })
+                                .collect();
+
+                            let list = List::new(items)
+                                .block(
+                                    Block::default()
+                                        .title(format!("Endpoints ({})", state.endpoints.len()))
+                                        .borders(Borders::ALL),
+                                )
+                                .highlight_style(
                                     Style::default()
-                                        .fg(method_color)
+                                        .bg(Color::DarkGray)
                                         .add_modifier(Modifier::BOLD),
-                                ),
-                                Span::raw(" "),
-                                Span::raw(&endpoint.path),
-                            ]);
+                                )
+                                .highlight_symbol(">> ");
 
-                            ListItem::new(line)
-                        })
-                        .collect();
+                            frame.render_stateful_widget(
+                                list,
+                                body_chunks[0],
+                                &mut self.list_state,
+                            );
+                        }
 
-                    let list = List::new(items)
-                        .block(
-                            Block::default()
-                                .title(format!("Endpoints ({})", state.endpoints.len()))
-                                .borders(Borders::ALL),
-                        )
-                        .highlight_style(
-                            Style::default()
-                                .bg(Color::DarkGray)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                        .highlight_symbol(">> ");
+                        ViewMode::Grouped => {
+                            let mut items: Vec<ListItem> = Vec::new();
+                            let mut render_items: Vec<RenderItem> = Vec::new();
 
-                    frame.render_stateful_widget(list, body_chunks[0], &mut self.list_state);
+                            let mut group_names: Vec<&String> =
+                                state.grouped_endpoints.keys().collect();
+                            group_names.sort();
+
+                            for group_name in group_names {
+                                let group_endpoints = &state.grouped_endpoints[group_name];
+                                let is_expanded = state.expanded_groups.contains(group_name);
+
+                                // create group header line
+                                let icon = if is_expanded { "▼" } else { "▶" };
+                                let header_line =
+                                    format!("{} {} ({})", icon, group_name, group_endpoints.len());
+
+                                // style the group header
+                                let header_item = ListItem::new(Line::from(Span::styled(
+                                    header_line,
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                )));
+                                items.push(header_item);
+
+                                // track that this line is a group header
+                                render_items.push(RenderItem::GroupHeader {
+                                    name: group_name.clone(),
+                                    count: group_endpoints.len(),
+                                    expanded: is_expanded,
+                                });
+
+                                // If expanded, add endpoints under this group
+                                if is_expanded {
+                                    for endpoint in group_endpoints {
+                                        let method_color = match endpoint.method.as_str() {
+                                            "GET" => Color::Green,
+                                            "POST" => Color::Blue,
+                                            "PUT" => Color::Yellow,
+                                            "DELETE" => Color::Red,
+                                            "PATCH" => Color::Cyan,
+                                            _ => Color::White,
+                                        };
+
+                                        // indent endpoints under group (use spaces)
+                                        let line = Line::from(vec![
+                                            Span::raw("  "), // Indentation
+                                            Span::styled(
+                                                format!("{:7}", endpoint.method),
+                                                Style::default()
+                                                    .fg(method_color)
+                                                    .add_modifier(Modifier::BOLD),
+                                            ),
+                                            Span::raw(" "),
+                                            Span::raw(&endpoint.path),
+                                        ]);
+
+                                        items.push(ListItem::new(line));
+
+                                        render_items.push(RenderItem::Endpoint {
+                                            endpoint: endpoint.clone(),
+                                        });
+                                    }
+                                }
+                            }
+
+                            // render the list
+                            let list = List::new(items)
+                                .block(
+                                    Block::default()
+                                        .title(format!(
+                                            "Endpoints - {} groups",
+                                            state.grouped_endpoints.len()
+                                        ))
+                                        .borders(Borders::ALL),
+                                )
+                                .highlight_style(
+                                    Style::default()
+                                        .bg(Color::DarkGray)
+                                        .add_modifier(Modifier::BOLD),
+                                )
+                                .highlight_symbol(">> ");
+
+                            frame.render_stateful_widget(
+                                list,
+                                body_chunks[0],
+                                &mut self.list_state,
+                            );
+
+                            drop(state); // release read lock
+                            let mut state_write = self.state.write().unwrap(); // get write lock
+                            state_write.render_items = render_items;
+                            drop(state_write); // release write lock immediately
+                        }
+                    }
                 }
             }
         }
 
-        // Right Panel
-        let selected_endpoint = state.endpoints.get(self.selected_index);
+        // re-acquire state for details panel (in case it was dropped in grouped rendering)
+        let state = self.state.read().unwrap();
+
+        // Right Panel - Get the correct endpoint based on view mode
+        let selected_endpoint = match state.view_mode {
+            ViewMode::Flat => {
+                // In flat mode, use endpoints array directly
+                state.endpoints.get(self.selected_index)
+            }
+            ViewMode::Grouped => {
+                // In grouped mode, extract endpoint from render_items
+                state
+                    .render_items
+                    .get(self.selected_index)
+                    .and_then(|item| match item {
+                        RenderItem::Endpoint { endpoint } => Some(endpoint),
+                        RenderItem::GroupHeader { .. } => None,
+                    })
+            }
+        };
+
         let details_text = match &state.loading_state {
             LoadingState::Fetching | LoadingState::Parsing => "Loading...".to_string(),
             LoadingState::Error(e) => format!("Error loading endpoints:\n\n{}", e),
@@ -320,12 +496,42 @@ impl App {
 
         frame.render_widget(details, body_chunks[1]);
 
+        let footer_text = match state.view_mode {
+            ViewMode::Flat => {
+                "↑↓: Navigate | Enter: Execute | G: Group | F5: Refresh | R: Retry | q: Quit"
+            }
+            ViewMode::Grouped => {
+                "↑↓: Navigate | Enter: Expand/Execute | G: Ungroup | F5: Refresh | q: Quit"
+            }
+        };
+
         // Footer with more commands
-        let footer =
-            Paragraph::new("↑↓: Navigate | Enter: Execute | F5: Refresh | R: Retry | q: Quit")
-                .style(Style::default().fg(Color::Yellow))
-                .block(Block::default().borders(Borders::ALL).title("Commands"));
+        let footer = Paragraph::new(footer_text)
+            .style(Style::default().fg(Color::Yellow))
+            .block(Block::default().borders(Borders::ALL).title("Commands"));
+
         frame.render_widget(footer, main_chunks[2]);
+    }
+
+    /// Helper function to count visible items in current view mode
+    fn count_visible_items(&self, state: &AppState) -> usize {
+        match state.view_mode {
+            ViewMode::Flat => state.endpoints.len(),
+            ViewMode::Grouped => {
+                let mut count = 0;
+                let mut group_names: Vec<&String> = state.grouped_endpoints.keys().collect();
+                group_names.sort();
+
+                for group_name in group_names {
+                    count += 1; // Group header
+                    if state.expanded_groups.contains(group_name) {
+                        let endpoints = &state.grouped_endpoints[group_name];
+                        count += endpoints.len(); // Endpoints in expanded group
+                    }
+                }
+                count
+            }
+        }
     }
 
     fn handle_events(&mut self) -> Result<()> {
@@ -341,6 +547,21 @@ impl App {
                             self.retry_fetch();
                         }
                     }
+                    KeyCode::Char('g') | KeyCode::Char('G') => {
+                        let mut state = self.state.write().unwrap();
+
+                        // Toggle view mode
+                        state.view_mode = match state.view_mode {
+                            ViewMode::Flat => ViewMode::Grouped,
+                            ViewMode::Grouped => ViewMode::Flat,
+                        };
+
+                        // Reset selection to top
+                        self.selected_index = 0;
+                        self.list_state.select(Some(0));
+
+                        log_debug(&format!("Switched to {:?} mode", state.view_mode));
+                    }
                     KeyCode::F(5) => {
                         // Refresh - refetch endpoints
                         self.fetch_endpoints_background();
@@ -353,13 +574,65 @@ impl App {
                     }
                     KeyCode::Down => {
                         let state = self.state.read().unwrap();
-                        if self.selected_index < state.endpoints.len().saturating_sub(1) {
+
+                        // Use render_items length in grouped mode, endpoints length in flat mode
+                        let max_index = match state.view_mode {
+                            ViewMode::Flat => state.endpoints.len().saturating_sub(1),
+                            ViewMode::Grouped => state.render_items.len().saturating_sub(1),
+                        };
+
+                        if self.selected_index < max_index {
                             self.selected_index += 1;
                             self.list_state.select(Some(self.selected_index));
                         }
                     }
                     KeyCode::Enter => {
-                        // TODO: Execute request in background
+                        let state = self.state.read().unwrap();
+
+                        // Check what view mode we're in
+                        if state.view_mode == ViewMode::Flat {
+                            // In flat mode: Execute request
+                            // TODO: Execute request for selected endpoint
+                            log_debug("Execute request in flat mode");
+                        } else {
+                            // In grouped mode: Check if we're on a group header or endpoint
+                            if let Some(item) = state.render_items.get(self.selected_index) {
+                                match item {
+                                    RenderItem::GroupHeader { name, .. } => {
+                                        let groupd_name = name.clone();
+
+                                        drop(state); // Release read lock
+                                        let mut state = self.state.write().unwrap();
+
+                                        if state.expanded_groups.contains(&groupd_name) {
+                                            state.expanded_groups.remove(&groupd_name);
+                                            log_debug(&format!("Collapsed group: {}", groupd_name));
+                                        } else {
+                                            state.expanded_groups.insert(groupd_name.clone());
+                                            log_debug(&format!("Expanded group: {}", groupd_name));
+                                        }
+
+                                        // Validate selection is still in bounds
+                                        drop(state);
+                                        let state = self.state.read().unwrap();
+
+                                        let visible_count = self.count_visible_items(&state);
+                                        if self.selected_index >= visible_count {
+                                            self.selected_index = visible_count.saturating_sub(1);
+                                            self.list_state.select(Some(self.selected_index));
+                                        }
+                                    }
+                                    RenderItem::Endpoint { endpoint } => {
+                                        // Execute request for this endpoint
+                                        log_debug(&format!(
+                                            "Execute: {} {}",
+                                            endpoint.method, endpoint.path
+                                        ));
+                                        // TODO: Actually execute request
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -370,7 +643,7 @@ impl App {
 }
 
 fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
-    let mut endpoints = Vec::new();
+    let mut endpoints: Vec<ApiEndpoint> = Vec::new();
 
     for (path, path_item) in spec.paths {
         if let Some(op) = &path_item.get {
@@ -378,6 +651,7 @@ fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 method: "GET".to_string(),
                 path: path.clone(),
                 summary: op.summary.clone(),
+                tags: op.tags.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.post {
@@ -385,6 +659,7 @@ fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 method: "POST".to_string(),
                 path: path.clone(),
                 summary: op.summary.clone(),
+                tags: op.tags.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.put {
@@ -392,6 +667,7 @@ fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 method: "PUT".to_string(),
                 path: path.clone(),
                 summary: op.summary.clone(),
+                tags: op.tags.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.delete {
@@ -399,6 +675,7 @@ fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 method: "DELETE".to_string(),
                 path: path.clone(),
                 summary: op.summary.clone(),
+                tags: op.tags.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.patch {
@@ -406,6 +683,7 @@ fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 method: "PATCH".to_string(),
                 path: path.clone(),
                 summary: op.summary.clone(),
+                tags: op.tags.clone().unwrap_or_default(),
             });
         }
     }
@@ -420,4 +698,12 @@ async fn main() -> Result<()> {
     let app_result = App::default().run(terminal).await;
     ratatui::restore();
     app_result
+}
+
+fn log_debug(msg: &str) {
+    let _ = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/dotrest.log")
+        .and_then(|mut f| writeln!(f, "{}", msg));
 }
