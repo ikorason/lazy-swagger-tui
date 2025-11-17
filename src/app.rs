@@ -1,8 +1,8 @@
-use crate::state::AppState;
-use crate::state::InputMode;
 use crate::swagger;
+use crate::types::InputMode;
 use crate::ui;
 use crate::ui::draw;
+use crate::{config::Config, state::AppState};
 use color_eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -16,10 +16,11 @@ use std::time::Instant;
 pub struct App {
     state: Arc<RwLock<AppState>>,
     list_state: ListState,
-    swagger_url: String,
+    swagger_url: Option<String>,
     spinner_index: usize,
     last_tick: Instant,
     event_handler: ui::EventHandler,
+    config: Config,
 }
 
 impl Default for App {
@@ -27,21 +28,38 @@ impl Default for App {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
+        // Load config
+        let config = Config::load().unwrap();
+        let swagger_url = config.server.swagger_url.clone();
+
+        // Determine initial input mode
+        let initial_input_mode = if swagger_url.is_none() {
+            InputMode::EnteringUrl // Show URL modal if no config
+        } else {
+            InputMode::Normal
+        };
+
+        let mut state = AppState::default();
+        state.input_mode = initial_input_mode;
+
         Self {
-            state: Arc::new(RwLock::new(AppState::default())),
+            state: Arc::new(RwLock::new(state)),
             list_state,
-            swagger_url: "http://localhost:50002/swagger/v2/swagger.json".to_string(),
+            swagger_url,
             spinner_index: 0,
             last_tick: Instant::now(),
             event_handler: ui::EventHandler::new(),
+            config,
         }
     }
 }
 
 impl App {
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        // Start initial fetch
-        self.fetch_endpoints_background();
+        // Only fetch if we have a URL
+        if self.swagger_url.is_some() {
+            self.fetch_endpoints_background();
+        }
 
         // Main UI loop
         while !self.event_handler.should_quit {
@@ -53,14 +71,17 @@ impl App {
 
             terminal.draw(|frame| self.draw(frame))?;
 
-            // Clone what we need for the event handler
             let state = Arc::clone(&self.state);
-            let should_fetch = self
+            let (should_fetch, url_submitted) = self
                 .event_handler
                 .handle_events(state, &mut self.list_state)?;
 
-            // If fetch was requested, do it
-            if should_fetch {
+            // If URL was submitted, save it and start fetching
+            if let Some(url) = url_submitted {
+                self.swagger_url = Some(url.clone());
+                self.config.set_swagger_url(url)?;
+                self.fetch_endpoints_background();
+            } else if should_fetch {
                 self.fetch_endpoints_background();
             }
         }
@@ -86,11 +107,13 @@ impl App {
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(main_chunks[1]);
 
+        let display_url = self.swagger_url.as_deref().unwrap_or("No URL configured");
+
         // Render header
         ui::render_header(
             frame,
             main_chunks[0],
-            &self.swagger_url,
+            display_url,
             &state.loading_state,
             state.endpoints.len(),
             &state.auth,
@@ -141,6 +164,9 @@ impl App {
         // Render modals LAST - after everything else (re-borrow state if needed)
         let state = self.state.read().unwrap();
         match state.input_mode {
+            InputMode::EnteringUrl => {
+                draw::render_url_input_modal(frame, &state);
+            }
             InputMode::EnteringToken => {
                 draw::render_token_input_modal(frame, &state);
             }
@@ -152,6 +178,8 @@ impl App {
     }
 
     fn fetch_endpoints_background(&self) {
-        swagger::fetch_endpoints_background(Arc::clone(&self.state), self.swagger_url.clone());
+        if let Some(url) = &self.swagger_url {
+            swagger::fetch_endpoints_background(Arc::clone(&self.state), url.clone());
+        }
     }
 }

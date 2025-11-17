@@ -56,6 +56,14 @@ pub enum RenderItem {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputMode {
+    Normal,
+    EnteringToken,
+    ConfirmClearToken,
+    EnteringUrl,
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthState {
     pub token: Option<String>,
@@ -68,10 +76,6 @@ impl AuthState {
 
     pub fn is_authenticated(&self) -> bool {
         self.token.is_some()
-    }
-
-    pub fn get_header_value(&self) -> Option<String> {
-        self.token.as_ref().map(|t| format!("Bearer {}", t))
     }
 
     pub fn set_token(&mut self, token: String) {

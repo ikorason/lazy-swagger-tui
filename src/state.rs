@@ -1,4 +1,4 @@
-use crate::types::{ApiEndpoint, AuthState, LoadingState, RenderItem, ViewMode};
+use crate::types::{ApiEndpoint, AuthState, InputMode, LoadingState, RenderItem, ViewMode};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -13,13 +13,7 @@ pub struct AppState {
     pub auth: AuthState,
     pub input_mode: InputMode,
     pub token_input: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum InputMode {
-    Normal,
-    EnteringToken,
-    ConfirmClearToken,
+    pub url_input: String,
 }
 
 impl Default for AppState {
@@ -35,6 +29,7 @@ impl Default for AppState {
             auth: AuthState::new(),
             input_mode: InputMode::Normal,
             token_input: String::new(),
+            url_input: String::new(),
         }
     }
 }

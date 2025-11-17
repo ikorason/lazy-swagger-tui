@@ -301,10 +301,10 @@ pub fn render_details_panel(
 pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
     let footer_text = match view_mode {
         ViewMode::Flat => {
-            "↑↓: Navigate | Enter: Execute | G: Group | F5: Refresh | R: Retry | q: Quit"
+            "↑↓: Navigate | Enter: Execute | G: Group | u: URL | a: Auth | F5: Refresh | R: Retry | q: Quit"
         }
         ViewMode::Grouped => {
-            "↑↓: Navigate | Enter: Expand/Execute | G: Ungroup | F5: Refresh | q: Quit"
+            "↑↓: Navigate | Enter: Expand/Execute | G: Ungroup | u: URL | a: Auth | F5: Refresh | q: Quit"
         }
     };
 
@@ -483,4 +483,72 @@ pub fn render_clear_confirmation_modal(frame: &mut Frame) {
         )
         .alignment(Alignment::Center);
     frame.render_widget(actions, chunks[2]);
+}
+
+pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
+    use ratatui::widgets::Clear;
+
+    let area = frame.area();
+
+    let modal_width = (area.width as f32 * 0.7).min(90.0) as u16;
+    let modal_height = 9;
+    let modal_x = (area.width.saturating_sub(modal_width)) / 2;
+    let modal_y = (area.height.saturating_sub(modal_height)) / 2;
+
+    let modal_area = Rect {
+        x: modal_x,
+        y: modal_y,
+        width: modal_width,
+        height: modal_height,
+    };
+
+    frame.render_widget(Clear, modal_area);
+
+    let block = Block::default()
+        .title(" Configure Swagger URL ")
+        .borders(Borders::ALL)
+        .border_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // Title/description
+            Constraint::Length(1), // Label
+            Constraint::Length(1), // Input
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Help
+        ])
+        .split(inner);
+
+    // Description
+    let desc = Paragraph::new("Enter the URL to your Swagger/OpenAPI specification.\nExample: http://localhost:5000/swagger/v1/swagger.json")
+        .style(Style::default().fg(Color::Gray))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(desc, chunks[0]);
+
+    // Label
+    let label = Paragraph::new("URL:").style(Style::default().fg(Color::LightCyan));
+    frame.render_widget(label, chunks[1]);
+
+    // Input field
+    let input = Paragraph::new(state.url_input.clone()).style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
+    frame.render_widget(input, chunks[2]);
+
+    // Help text
+    let help = Paragraph::new("Enter: Confirm  |  Esc: Cancel  |  'u': Change URL anytime")
+        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+        .alignment(Alignment::Center);
+    frame.render_widget(help, chunks[4]);
 }

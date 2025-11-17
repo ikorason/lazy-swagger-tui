@@ -1,5 +1,7 @@
-use crate::state::{AppState, InputMode, count_visible_items};
-use crate::types::{RenderItem, ViewMode};
+use crate::config;
+use crate::state::{AppState, count_visible_items};
+use crate::types::{InputMode, RenderItem, ViewMode};
+
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::widgets::ListState;
@@ -25,14 +27,18 @@ impl EventHandler {
         &mut self,
         state: Arc<RwLock<AppState>>,
         list_state: &mut ListState,
-    ) -> Result<bool> {
+    ) -> Result<(bool, Option<String>)> {
         let mut should_fetch = false;
+        let mut url_submitted = None;
 
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 let input_mode = state.read().unwrap().input_mode.clone();
 
                 match input_mode {
+                    InputMode::EnteringUrl => {
+                        url_submitted = self.handle_url_input(key, state.clone())?;
+                    }
                     InputMode::EnteringToken => {
                         self.handle_token_input(key, state.clone())?;
                     }
@@ -55,6 +61,10 @@ impl EventHandler {
                         KeyCode::Char('A') => {
                             self.handle_clear_token_request(state.clone());
                         }
+                        KeyCode::Char('u') | KeyCode::Char('U') => {
+                            // ← Add this
+                            self.handle_url_dialog(state.clone());
+                        }
                         KeyCode::F(5) => {
                             should_fetch = true;
                         }
@@ -72,7 +82,64 @@ impl EventHandler {
                 }
             }
         }
-        Ok(should_fetch)
+        Ok((should_fetch, url_submitted))
+    }
+
+    fn handle_url_dialog(&self, state: Arc<RwLock<AppState>>) {
+        let mut s = state.write().unwrap();
+        s.input_mode = InputMode::EnteringUrl;
+        // Pre-fill with current URL if it exists (we'll need to pass this from App)
+        // For now, start empty
+        s.url_input.clear();
+        log_debug("Entering URL input mode");
+    }
+
+    fn handle_url_input(
+        &self,
+        key: crossterm::event::KeyEvent,
+        state: Arc<RwLock<AppState>>,
+    ) -> Result<Option<String>> {
+        match key.code {
+            KeyCode::Enter => {
+                let mut s = state.write().unwrap();
+                let url = s.url_input.trim().to_string();
+
+                if !url.is_empty() {
+                    // Validate URL
+                    match config::validate_url(&url) {
+                        Ok(_) => {
+                            s.input_mode = InputMode::Normal;
+                            s.url_input.clear();
+                            log_debug(&format!("URL submitted: {}", url));
+                            return Ok(Some(url));
+                        }
+                        Err(e) => {
+                            log_debug(&format!("Invalid URL: {}", e));
+                            // Keep the modal open, user can fix it
+                            // TODO: Show error message in modal
+                        }
+                    }
+                } else {
+                    log_debug("Empty URL, not submitting");
+                }
+            }
+            KeyCode::Esc => {
+                let mut s = state.write().unwrap();
+                s.input_mode = InputMode::Normal;
+                s.url_input.clear();
+                log_debug("URL input cancelled");
+            }
+            KeyCode::Backspace => {
+                let mut s = state.write().unwrap();
+                s.url_input.pop();
+            }
+            KeyCode::Char(c) => {
+                let mut s = state.write().unwrap();
+                s.url_input.push(c);
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     fn handle_token_input(

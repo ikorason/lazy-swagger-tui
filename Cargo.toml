@@ -21,3 +21,6 @@ serde_json = "1.0"
 
 # error handling
 anyhow = "1.0"
+
+toml = "0.9.8"
+dirs = "6.0.0"
