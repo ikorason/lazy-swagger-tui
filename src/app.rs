@@ -1,6 +1,8 @@
 use crate::state::AppState;
+use crate::state::InputMode;
 use crate::swagger;
 use crate::ui;
+use crate::ui::draw;
 use color_eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -91,6 +93,7 @@ impl App {
             &self.swagger_url,
             &state.loading_state,
             state.endpoints.len(),
+            &state.auth,
         );
 
         // Render left panel (endpoints list)
@@ -133,6 +136,18 @@ impl App {
             );
 
             ui::render_footer(frame, main_chunks[2], &state.view_mode);
+        }
+
+        // Render modals LAST - after everything else (re-borrow state if needed)
+        let state = self.state.read().unwrap();
+        match state.input_mode {
+            InputMode::EnteringToken => {
+                draw::render_token_input_modal(frame, &state);
+            }
+            InputMode::ConfirmClearToken => {
+                draw::render_clear_confirmation_modal(frame);
+            }
+            InputMode::Normal => {}
         }
     }
 

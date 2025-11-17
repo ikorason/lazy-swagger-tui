@@ -1,5 +1,7 @@
 use crate::state::AppState;
-use crate::types::{LoadingState, RenderItem, ViewMode};
+use crate::types::{AuthState, LoadingState, RenderItem, ViewMode};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use ratatui::widgets::Wrap;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -14,6 +16,7 @@ pub fn render_header(
     swagger_url: &str,
     loading_state: &LoadingState,
     endpoints_count: usize,
+    auth_state: &AuthState,
 ) {
     let status_text = match loading_state {
         LoadingState::Idle => "Idle".to_string(),
@@ -23,12 +26,27 @@ pub fn render_header(
         LoadingState::Error(_) => "Error".to_string(),
     };
 
-    let header_text = format!("dotREST - {} [{}]", swagger_url, status_text);
+    let auth_status = get_auth_status_text(auth_state);
+
+    let header_text = format!(
+        "dotREST - {} [{}] | {}",
+        swagger_url, status_text, auth_status
+    );
+
     let header = Paragraph::new(header_text)
         .style(Style::default().fg(Color::Cyan))
         .block(Block::default().borders(Borders::ALL));
 
     frame.render_widget(header, area);
+}
+
+fn get_auth_status_text(auth: &AuthState) -> String {
+    if auth.is_authenticated() {
+        let display = auth.get_masked_display();
+        format!("🔒 {} | 'a':edit 'A':clear", display)
+    } else {
+        "🔓 Not authenticated | 'a':set token".to_string()
+    }
 }
 
 pub fn render_endpoints_panel(
@@ -335,4 +353,134 @@ pub fn build_grouped_render_items(state: &AppState) -> Vec<RenderItem> {
     }
 
     render_items
+}
+
+pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
+    use ratatui::widgets::Clear; // Add this import at the top of the file
+
+    let area = frame.area();
+
+    let modal_width = (area.width as f32 * 0.6).min(80.0) as u16;
+    let modal_height = 7;
+    let modal_x = (area.width.saturating_sub(modal_width)) / 2;
+    let modal_y = (area.height.saturating_sub(modal_height)) / 2;
+
+    let modal_area = Rect {
+        x: modal_x,
+        y: modal_y,
+        width: modal_width,
+        height: modal_height,
+    };
+
+    // Clear the background behind the modal - THIS IS THE FIX
+    frame.render_widget(Clear, modal_area);
+
+    // Create modal block
+    let block = Block::default()
+        .title(" Enter Bearer Token ")
+        .borders(Borders::ALL)
+        .border_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    // Label
+    let label = Paragraph::new("Token:").style(Style::default().fg(Color::LightCyan));
+    frame.render_widget(label, chunks[0]);
+
+    // Input field
+    let display_token = if state.token_input.len() > 50 {
+        format!(
+            "{}...{}",
+            &state.token_input[..20],
+            &state.token_input[state.token_input.len() - 20..]
+        )
+    } else {
+        state.token_input.clone()
+    };
+
+    let input = Paragraph::new(display_token).style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
+    frame.render_widget(input, chunks[1]);
+
+    // Help text
+    let help = Paragraph::new("Enter: Save  |  Esc: Cancel")
+        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+        .alignment(Alignment::Center);
+    frame.render_widget(help, chunks[3]);
+}
+
+pub fn render_clear_confirmation_modal(frame: &mut Frame) {
+    use ratatui::widgets::Clear; // Add this import at the top of the file
+
+    let area = frame.area();
+
+    let modal_width = (area.width as f32 * 0.5).min(60.0) as u16;
+    let modal_height = 7;
+    let modal_x = (area.width.saturating_sub(modal_width)) / 2;
+    let modal_y = (area.height.saturating_sub(modal_height)) / 2;
+
+    let modal_area = Rect {
+        x: modal_x,
+        y: modal_y,
+        width: modal_width,
+        height: modal_height,
+    };
+
+    // Clear the background behind the modal - THIS IS THE FIX
+    frame.render_widget(Clear, modal_area);
+
+    // Create modal block
+    let block = Block::default()
+        .title(" Clear Token? ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    // Message
+    let message = Paragraph::new("This will remove your authentication token.\nYou will need to re-enter it to make authenticated requests.")
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    frame.render_widget(message, chunks[0]);
+
+    // Actions
+    let actions = Paragraph::new("[Y] Yes, clear it  |  [N] Cancel")
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
+    frame.render_widget(actions, chunks[2]);
 }

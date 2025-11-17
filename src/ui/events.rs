@@ -1,4 +1,4 @@
-use crate::state::{AppState, count_visible_items};
+use crate::state::{AppState, InputMode, count_visible_items};
 use crate::types::{RenderItem, ViewMode};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode};
@@ -30,33 +30,132 @@ impl EventHandler {
 
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => {
-                        self.should_quit = true;
+                let input_mode = state.read().unwrap().input_mode.clone();
+
+                match input_mode {
+                    InputMode::EnteringToken => {
+                        self.handle_token_input(key, state.clone())?;
                     }
-                    KeyCode::Char('r') | KeyCode::Char('R') => {
-                        should_fetch = self.handle_retry(state.clone());
+                    InputMode::ConfirmClearToken => {
+                        self.handle_clear_confirmation(key, state.clone())?;
                     }
-                    KeyCode::Char('g') | KeyCode::Char('G') => {
-                        self.handle_toggle_view(state.clone(), list_state);
-                    }
-                    KeyCode::F(5) => {
-                        should_fetch = true;
-                    }
-                    KeyCode::Up => {
-                        self.handle_up(list_state);
-                    }
-                    KeyCode::Down => {
-                        self.handle_down(state.clone(), list_state);
-                    }
-                    KeyCode::Enter => {
-                        self.handle_enter(state.clone(), list_state);
-                    }
-                    _ => {}
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('q') => {
+                            self.should_quit = true;
+                        }
+                        KeyCode::Char('r') | KeyCode::Char('R') => {
+                            should_fetch = self.handle_retry(state.clone());
+                        }
+                        KeyCode::Char('g') | KeyCode::Char('G') => {
+                            self.handle_toggle_view(state.clone(), list_state);
+                        }
+                        KeyCode::Char('a') => {
+                            self.handle_auth_dialog(state.clone());
+                        }
+                        KeyCode::Char('A') => {
+                            self.handle_clear_token_request(state.clone());
+                        }
+                        KeyCode::F(5) => {
+                            should_fetch = true;
+                        }
+                        KeyCode::Up => {
+                            self.handle_up(list_state);
+                        }
+                        KeyCode::Down => {
+                            self.handle_down(state.clone(), list_state);
+                        }
+                        KeyCode::Enter => {
+                            self.handle_enter(state.clone(), list_state);
+                        }
+                        _ => {}
+                    },
                 }
             }
         }
         Ok(should_fetch)
+    }
+
+    fn handle_token_input(
+        &self,
+        key: crossterm::event::KeyEvent,
+        state: Arc<RwLock<AppState>>,
+    ) -> Result<()> {
+        match key.code {
+            KeyCode::Enter => {
+                let mut s = state.write().unwrap();
+                let token = s.token_input.trim().to_string();
+
+                if !token.is_empty() {
+                    s.auth.set_token(token);
+                    log_debug("Token saved");
+                } else {
+                    log_debug("Empty token, not saving");
+                }
+
+                s.input_mode = InputMode::Normal;
+                s.token_input.clear();
+            }
+            KeyCode::Esc => {
+                let mut s = state.write().unwrap();
+                s.input_mode = InputMode::Normal;
+                s.token_input.clear();
+                log_debug("Token input cancelled");
+            }
+            KeyCode::Backspace => {
+                let mut s = state.write().unwrap();
+                s.token_input.pop();
+            }
+            KeyCode::Char(c) => {
+                let mut s = state.write().unwrap();
+                s.token_input.push(c);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_clear_confirmation(
+        &self,
+        key: crossterm::event::KeyEvent,
+        state: Arc<RwLock<AppState>>,
+    ) -> Result<()> {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let mut s = state.write().unwrap();
+                s.auth.clear_token();
+                s.input_mode = InputMode::Normal;
+                log_debug("Token cleared");
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                let mut s = state.write().unwrap();
+                s.input_mode = InputMode::Normal;
+                log_debug("Token clear cancelled");
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_auth_dialog(&self, state: Arc<RwLock<AppState>>) {
+        let mut s = state.write().unwrap();
+        s.input_mode = InputMode::EnteringToken;
+
+        // Pre-fill with current token if exists
+        s.token_input = s.auth.token.clone().unwrap_or_default();
+
+        log_debug("Entering token input mode");
+    }
+
+    fn handle_clear_token_request(&self, state: Arc<RwLock<AppState>>) {
+        let s = state.read().unwrap();
+
+        // Only show confirmation if token exists
+        if s.auth.is_authenticated() {
+            drop(s);
+            let mut s = state.write().unwrap();
+            s.input_mode = InputMode::ConfirmClearToken;
+            log_debug("Requesting token clear confirmation");
+        }
     }
 
     fn handle_retry(&self, state: Arc<RwLock<AppState>>) -> bool {

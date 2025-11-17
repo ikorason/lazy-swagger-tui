@@ -55,3 +55,49 @@ pub enum RenderItem {
         endpoint: ApiEndpoint,
     },
 }
+
+#[derive(Debug, Clone)]
+pub struct AuthState {
+    pub token: Option<String>,
+}
+
+impl AuthState {
+    pub fn new() -> Self {
+        Self { token: None }
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.token.is_some()
+    }
+
+    pub fn get_header_value(&self) -> Option<String> {
+        self.token.as_ref().map(|t| format!("Bearer {}", t))
+    }
+
+    pub fn set_token(&mut self, token: String) {
+        self.token = Some(token);
+    }
+
+    pub fn clear_token(&mut self) {
+        self.token = None;
+    }
+
+    pub fn get_masked_display(&self) -> String {
+        match &self.token {
+            Some(token) => mask_token(token),
+            None => "Not set".to_string(),
+        }
+    }
+}
+
+fn mask_token(token: &str) -> String {
+    let len = token.len();
+    if len <= 15 {
+        // Too short to safely show, just show dots
+        return "●".repeat(len);
+    }
+
+    let first = &token[..7];
+    let last = &token[len - 6..];
+    format!("{}...{}", first, last)
+}
