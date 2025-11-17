@@ -1,0 +1,168 @@
+use crate::state::{AppState, count_visible_items};
+use crate::types::{RenderItem, ViewMode};
+use color_eyre::Result;
+use crossterm::event::{self, Event, KeyCode};
+use ratatui::widgets::ListState;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::sync::{Arc, RwLock};
+
+#[derive(Debug)]
+pub struct EventHandler {
+    pub should_quit: bool,
+    pub selected_index: usize,
+}
+
+impl EventHandler {
+    pub fn new() -> Self {
+        Self {
+            should_quit: false,
+            selected_index: 0,
+        }
+    }
+
+    pub fn handle_events(
+        &mut self,
+        state: Arc<RwLock<AppState>>,
+        list_state: &mut ListState,
+    ) -> Result<bool> {
+        let mut should_fetch = false;
+
+        if event::poll(std::time::Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => {
+                        self.should_quit = true;
+                    }
+                    KeyCode::Char('r') | KeyCode::Char('R') => {
+                        should_fetch = self.handle_retry(state.clone());
+                    }
+                    KeyCode::Char('g') | KeyCode::Char('G') => {
+                        self.handle_toggle_view(state.clone(), list_state);
+                    }
+                    KeyCode::F(5) => {
+                        should_fetch = true;
+                    }
+                    KeyCode::Up => {
+                        self.handle_up(list_state);
+                    }
+                    KeyCode::Down => {
+                        self.handle_down(state.clone(), list_state);
+                    }
+                    KeyCode::Enter => {
+                        self.handle_enter(state.clone(), list_state);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(should_fetch)
+    }
+
+    fn handle_retry(&self, state: Arc<RwLock<AppState>>) -> bool {
+        let state_read = state.read().unwrap();
+        if matches!(
+            state_read.loading_state,
+            crate::types::LoadingState::Error(_)
+        ) {
+            drop(state_read);
+
+            // Increment retry count
+            if let Ok(mut s) = state.write() {
+                s.retry_count += 1;
+            }
+
+            return true; // Signal that we should fetch
+        }
+        false // Don't fetch if not in error state
+    }
+
+    fn handle_toggle_view(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
+        let mut state = state.write().unwrap();
+
+        // Toggle view mode
+        state.view_mode = match state.view_mode {
+            ViewMode::Flat => ViewMode::Grouped,
+            ViewMode::Grouped => ViewMode::Flat,
+        };
+
+        // Reset selection to top
+        self.selected_index = 0;
+        list_state.select(Some(0));
+
+        log_debug(&format!("Switched to {:?} mode", state.view_mode));
+    }
+
+    fn handle_up(&mut self, list_state: &mut ListState) {
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+            list_state.select(Some(self.selected_index));
+        }
+    }
+
+    fn handle_down(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
+        let state = state.read().unwrap();
+
+        // Use render_items length in grouped mode, endpoints length in flat mode
+        let max_index = match state.view_mode {
+            ViewMode::Flat => state.endpoints.len().saturating_sub(1),
+            ViewMode::Grouped => state.render_items.len().saturating_sub(1),
+        };
+
+        if self.selected_index < max_index {
+            self.selected_index += 1;
+            list_state.select(Some(self.selected_index));
+        }
+    }
+
+    fn handle_enter(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
+        let state_read = state.read().unwrap();
+
+        // Check what view mode we're in
+        if state_read.view_mode == ViewMode::Flat {
+            // In flat mode: Execute request
+            // TODO: Execute request for selected endpoint
+            log_debug("Execute request in flat mode");
+        } else {
+            // In grouped mode: Check if we're on a group header or endpoint
+            if let Some(item) = state_read.render_items.get(self.selected_index) {
+                match item {
+                    RenderItem::GroupHeader { name, .. } => {
+                        let group_name = name.clone();
+
+                        drop(state_read); // Release read lock
+                        let mut state_write = state.write().unwrap();
+
+                        if state_write.expanded_groups.contains(&group_name) {
+                            state_write.expanded_groups.remove(&group_name);
+                            log_debug(&format!("Collapsed group: {}", group_name));
+                        } else {
+                            state_write.expanded_groups.insert(group_name.clone());
+                            log_debug(&format!("Expanded group: {}", group_name));
+                        }
+
+                        // Validate selection is still in bounds
+                        let visible_count = count_visible_items(&state_write);
+                        if self.selected_index >= visible_count {
+                            self.selected_index = visible_count.saturating_sub(1);
+                            list_state.select(Some(self.selected_index));
+                        }
+                    }
+                    RenderItem::Endpoint { endpoint } => {
+                        // Execute request for this endpoint
+                        log_debug(&format!("Execute: {} {}", endpoint.method, endpoint.path));
+                        // TODO: Actually execute request
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn log_debug(msg: &str) {
+    let _ = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/dotrest.log")
+        .and_then(|mut f| writeln!(f, "{}", msg));
+}
