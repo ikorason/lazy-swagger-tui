@@ -11,12 +11,17 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub swagger_url: Option<String>,
+    //* API base URL for requests */
+    pub base_url: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            server: ServerConfig { swagger_url: None },
+            server: ServerConfig {
+                swagger_url: None,
+                base_url: None,
+            },
         }
     }
 }
@@ -61,9 +66,13 @@ impl Config {
         Ok(())
     }
 
-    /// Set swagger URL and save
-    pub fn set_swagger_url(&mut self, url: String) -> Result<()> {
-        self.server.swagger_url = Some(url);
+    /// Set swagger URL, auto-extract base URL, and save
+    pub fn set_swagger_url(&mut self, swagger_url: String, base_url: Option<String>) -> Result<()> {
+        self.server.swagger_url = Some(swagger_url.clone());
+
+        // Use provided base_url, or extract from swagger_url
+        self.server.base_url = base_url.or_else(|| Some(extract_base_url(&swagger_url)));
+
         self.save()?;
         Ok(())
     }
@@ -85,4 +94,26 @@ pub fn validate_url(url: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Extracts base URL from swagger URL
+/// Example: http://localhost:5000/swagger/v1/swagger.json -> http://localhost:5000
+pub fn extract_base_url(swagger_url: &str) -> String {
+    // Parse the URL
+    if let Ok(parsed) = url::Url::parse(swagger_url) {
+        // Get scheme, host, and port
+        let scheme = parsed.scheme();
+        let host = parsed.host_str().unwrap_or("localhost");
+
+        let base = if let Some(port) = parsed.port() {
+            format!("{}://{}:{}", scheme, host, port)
+        } else {
+            format!("{}://{}", scheme, host)
+        };
+
+        base
+    } else {
+        // Fallback: just return the swagger URL if parsing fails
+        swagger_url.to_string()
+    }
 }

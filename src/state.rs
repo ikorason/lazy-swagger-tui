@@ -1,4 +1,7 @@
-use crate::types::{ApiEndpoint, AuthState, InputMode, LoadingState, RenderItem, ViewMode};
+use crate::types::{
+    ApiEndpoint, ApiResponse, AuthState, InputMode, LoadingState, RenderItem, UrlInputField,
+    ViewMode,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -14,6 +17,13 @@ pub struct AppState {
     pub input_mode: InputMode,
     pub token_input: String,
     pub url_input: String,
+    pub base_url_input: String,
+    /** track which field is active */
+    pub active_url_field: UrlInputField,
+    /** path of endpoints currently being executed */
+    pub executing_endpoint: Option<String>,
+    /** Response for currently selected endpoint */
+    pub current_response: Option<ApiResponse>,
 }
 
 impl Default for AppState {
@@ -30,6 +40,10 @@ impl Default for AppState {
             input_mode: InputMode::Normal,
             token_input: String::new(),
             url_input: String::new(),
+            base_url_input: String::new(),
+            active_url_field: UrlInputField::SwaggerUrl,
+            executing_endpoint: None,
+            current_response: None,
         }
     }
 }

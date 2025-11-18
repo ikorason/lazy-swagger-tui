@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct ApiEndpoint {
@@ -7,6 +8,15 @@ pub struct ApiEndpoint {
     pub path: String,
     pub summary: Option<String>,
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApiResponse {
+    pub status: u16,
+    pub body: String,
+    pub duration: Duration,
+    pub is_error: bool, // true for network errors, false for HTTP responses
+    pub error_message: Option<String>, // Only set if is_error = true
 }
 
 #[derive(Deserialize)]
@@ -64,6 +74,12 @@ pub enum InputMode {
     EnteringUrl,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum UrlInputField {
+    SwaggerUrl,
+    BaseUrl,
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthState {
     pub token: Option<String>,
@@ -104,4 +120,10 @@ fn mask_token(token: &str) -> String {
     let first = &token[..7];
     let last = &token[len - 6..];
     format!("{}...{}", first, last)
+}
+
+#[derive(Debug, Clone)]
+pub struct UrlSubmission {
+    pub swagger_url: String,
+    pub base_url: Option<String>,
 }

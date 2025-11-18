@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod request;
 mod state;
 mod swagger;
 mod types;

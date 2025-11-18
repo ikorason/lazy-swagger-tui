@@ -17,6 +17,7 @@ pub struct App {
     state: Arc<RwLock<AppState>>,
     list_state: ListState,
     swagger_url: Option<String>,
+    base_url: Option<String>,
     spinner_index: usize,
     last_tick: Instant,
     event_handler: ui::EventHandler,
@@ -31,6 +32,7 @@ impl Default for App {
         // Load config
         let config = Config::load().unwrap();
         let swagger_url = config.server.swagger_url.clone();
+        let base_url = config.server.base_url.clone();
 
         // Determine initial input mode
         let initial_input_mode = if swagger_url.is_none() {
@@ -46,6 +48,7 @@ impl Default for App {
             state: Arc::new(RwLock::new(state)),
             list_state,
             swagger_url,
+            base_url,
             spinner_index: 0,
             last_tick: Instant::now(),
             event_handler: ui::EventHandler::new(),
@@ -72,14 +75,19 @@ impl App {
             terminal.draw(|frame| self.draw(frame))?;
 
             let state = Arc::clone(&self.state);
-            let (should_fetch, url_submitted) = self
-                .event_handler
-                .handle_events(state, &mut self.list_state)?;
+            let (should_fetch, url_submitted) = self.event_handler.handle_events(
+                state,
+                &mut self.list_state,
+                self.base_url.clone(),
+                self.swagger_url.clone(),
+            )?;
 
             // If URL was submitted, save it and start fetching
-            if let Some(url) = url_submitted {
-                self.swagger_url = Some(url.clone());
-                self.config.set_swagger_url(url)?;
+            if let Some(submission) = url_submitted {
+                self.swagger_url = Some(submission.swagger_url.clone());
+                self.base_url = submission.base_url.clone();
+                self.config
+                    .set_swagger_url(submission.swagger_url, submission.base_url)?;
                 self.fetch_endpoints_background();
             } else if should_fetch {
                 self.fetch_endpoints_background();

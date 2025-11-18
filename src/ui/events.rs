@@ -1,6 +1,6 @@
 use crate::config;
 use crate::state::{AppState, count_visible_items};
-use crate::types::{InputMode, RenderItem, ViewMode};
+use crate::types::{InputMode, RenderItem, UrlInputField, UrlSubmission, ViewMode};
 
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode};
@@ -27,7 +27,9 @@ impl EventHandler {
         &mut self,
         state: Arc<RwLock<AppState>>,
         list_state: &mut ListState,
-    ) -> Result<(bool, Option<String>)> {
+        base_url: Option<String>,
+        swagger_url: Option<String>,
+    ) -> Result<(bool, Option<UrlSubmission>)> {
         let mut should_fetch = false;
         let mut url_submitted = None;
 
@@ -62,8 +64,11 @@ impl EventHandler {
                             self.handle_clear_token_request(state.clone());
                         }
                         KeyCode::Char('u') | KeyCode::Char('U') => {
-                            // ← Add this
-                            self.handle_url_dialog(state.clone());
+                            self.handle_url_dialog(
+                                state.clone(),
+                                swagger_url.clone(),
+                                base_url.clone(),
+                            );
                         }
                         KeyCode::F(5) => {
                             should_fetch = true;
@@ -75,7 +80,7 @@ impl EventHandler {
                             self.handle_down(state.clone(), list_state);
                         }
                         KeyCode::Enter => {
-                            self.handle_enter(state.clone(), list_state);
+                            self.handle_enter(state.clone(), list_state, base_url.clone());
                         }
                         _ => {}
                     },
@@ -85,12 +90,20 @@ impl EventHandler {
         Ok((should_fetch, url_submitted))
     }
 
-    fn handle_url_dialog(&self, state: Arc<RwLock<AppState>>) {
+    fn handle_url_dialog(
+        &self,
+        state: Arc<RwLock<AppState>>,
+        swagger_url: Option<String>,
+        base_url: Option<String>,
+    ) {
         let mut s = state.write().unwrap();
         s.input_mode = InputMode::EnteringUrl;
-        // Pre-fill with current URL if it exists (we'll need to pass this from App)
-        // For now, start empty
-        s.url_input.clear();
+
+        // pre-fill with current swagger URL if exists
+        s.url_input = swagger_url.unwrap_or_default();
+        s.base_url_input = base_url.unwrap_or_default();
+        s.active_url_field = UrlInputField::SwaggerUrl;
+
         log_debug("Entering URL input mode");
     }
 
@@ -98,47 +111,187 @@ impl EventHandler {
         &self,
         key: crossterm::event::KeyEvent,
         state: Arc<RwLock<AppState>>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<UrlSubmission>> {
+        use crate::types::UrlInputField;
+        use crossterm::event::KeyModifiers;
+
         match key.code {
+            KeyCode::Tab => {
+                // Switch between fields and auto-extract when leaving swagger field
+                let mut s = state.write().unwrap();
+
+                match s.active_url_field {
+                    UrlInputField::SwaggerUrl => {
+                        // Moving from Swagger to Base - only auto-extract if base is empty
+                        if !s.url_input.is_empty() && s.base_url_input.is_empty() {
+                            s.base_url_input = config::extract_base_url(&s.url_input);
+                            log_debug(&format!("Auto-extracted base URL: {}", s.base_url_input));
+                        } else if !s.base_url_input.is_empty() {
+                            log_debug("Base URL already exists, not auto-extracting");
+                        }
+                        s.active_url_field = UrlInputField::BaseUrl;
+                    }
+                    UrlInputField::BaseUrl => {
+                        s.active_url_field = UrlInputField::SwaggerUrl;
+                    }
+                }
+            }
+
             KeyCode::Enter => {
                 let mut s = state.write().unwrap();
-                let url = s.url_input.trim().to_string();
+                let swagger_url = s.url_input.trim().to_string();
+                let base_url = s.base_url_input.trim().to_string();
 
-                if !url.is_empty() {
-                    // Validate URL
-                    match config::validate_url(&url) {
+                if !swagger_url.is_empty() {
+                    // Validate both URLs
+                    match config::validate_url(&swagger_url) {
                         Ok(_) => {
+                            // Also validate base URL if provided
+                            if !base_url.is_empty() {
+                                if let Err(e) = config::validate_url(&base_url) {
+                                    log_debug(&format!("Invalid base URL: {}", e));
+                                    // Keep modal open
+                                    return Ok(None);
+                                }
+                            }
+
                             s.input_mode = InputMode::Normal;
+
+                            let submission = crate::types::UrlSubmission {
+                                swagger_url: swagger_url.clone(),
+                                base_url: if base_url.is_empty() {
+                                    None
+                                } else {
+                                    Some(base_url.clone())
+                                },
+                            };
+
                             s.url_input.clear();
-                            log_debug(&format!("URL submitted: {}", url));
-                            return Ok(Some(url));
+                            s.base_url_input.clear();
+                            s.active_url_field = UrlInputField::SwaggerUrl;
+
+                            log_debug(&format!(
+                                "URLs submitted - Swagger: {}, Base: {:?}",
+                                submission.swagger_url, submission.base_url
+                            ));
+
+                            return Ok(Some(submission));
                         }
                         Err(e) => {
-                            log_debug(&format!("Invalid URL: {}", e));
-                            // Keep the modal open, user can fix it
-                            // TODO: Show error message in modal
+                            log_debug(&format!("Invalid swagger URL: {}", e));
                         }
                     }
                 } else {
-                    log_debug("Empty URL, not submitting");
+                    log_debug("Empty swagger URL, not submitting");
                 }
             }
+
             KeyCode::Esc => {
                 let mut s = state.write().unwrap();
                 s.input_mode = InputMode::Normal;
                 s.url_input.clear();
+                s.base_url_input.clear();
+                s.active_url_field = UrlInputField::SwaggerUrl;
                 log_debug("URL input cancelled");
             }
+
             KeyCode::Backspace => {
                 let mut s = state.write().unwrap();
-                s.url_input.pop();
+                match s.active_url_field {
+                    UrlInputField::SwaggerUrl => {
+                        s.url_input.pop();
+                    }
+                    UrlInputField::BaseUrl => {
+                        s.base_url_input.pop();
+                    }
+                }
             }
-            KeyCode::Char(c) => {
+
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+U: Clear entire line
                 let mut s = state.write().unwrap();
-                s.url_input.push(c);
+                match s.active_url_field {
+                    UrlInputField::SwaggerUrl => {
+                        s.url_input.clear();
+                        log_debug("Cleared swagger URL input");
+                    }
+                    UrlInputField::BaseUrl => {
+                        s.base_url_input.clear();
+                        log_debug("Cleared base URL input");
+                    }
+                }
             }
+
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+W: Delete word backwards
+                let mut s = state.write().unwrap();
+                let input = match s.active_url_field {
+                    UrlInputField::SwaggerUrl => &mut s.url_input,
+                    UrlInputField::BaseUrl => &mut s.base_url_input,
+                };
+
+                // Find last word boundary (space, slash, colon, dot)
+                if let Some(pos) =
+                    input.rfind(|c: char| c == ' ' || c == '/' || c == ':' || c == '.')
+                {
+                    input.truncate(pos);
+                } else {
+                    input.clear();
+                }
+            }
+
+            KeyCode::Char(c) => {
+                // Collect this character and any pending characters (for paste support)
+                let mut chars = vec![c];
+
+                // Drain any immediately available character events
+                loop {
+                    match event::poll(std::time::Duration::from_millis(0)) {
+                        Ok(true) => {
+                            if let Ok(Event::Key(next_key)) = event::read() {
+                                match next_key.code {
+                                    KeyCode::Char(next_c)
+                                        if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                                    {
+                                        chars.push(next_c);
+                                    }
+                                    _ => {
+                                        // Non-character or control key, stop batching
+                                        break;
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
+
+                // Log before consuming chars
+                let char_count = chars.len();
+
+                // Add all batched characters at once
+                let mut s = state.write().unwrap();
+                for ch in chars {
+                    match s.active_url_field {
+                        UrlInputField::SwaggerUrl => {
+                            s.url_input.push(ch);
+                        }
+                        UrlInputField::BaseUrl => {
+                            s.base_url_input.push(ch);
+                        }
+                    }
+                }
+
+                if char_count > 1 {
+                    log_debug(&format!("Batched {} characters in URL input", char_count));
+                }
+            }
+
             _ => {}
         }
+
         Ok(None)
     }
 
@@ -147,6 +300,8 @@ impl EventHandler {
         key: crossterm::event::KeyEvent,
         state: Arc<RwLock<AppState>>,
     ) -> Result<()> {
+        use crossterm::event::KeyModifiers;
+
         match key.code {
             KeyCode::Enter => {
                 let mut s = state.write().unwrap();
@@ -172,9 +327,65 @@ impl EventHandler {
                 let mut s = state.write().unwrap();
                 s.token_input.pop();
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+U: Clear entire token
                 let mut s = state.write().unwrap();
-                s.token_input.push(c);
+                s.token_input.clear();
+                log_debug("Cleared token input");
+            }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+W: Delete word backwards (less useful for tokens, but consistent)
+                let mut s = state.write().unwrap();
+                if let Some(pos) = s.token_input.rfind(|c: char| !c.is_alphanumeric()) {
+                    s.token_input.truncate(pos);
+                } else {
+                    s.token_input.clear();
+                }
+            }
+            KeyCode::Char(c) => {
+                // Collect this character and any pending characters (for paste support)
+                let mut chars = vec![c];
+
+                // Drain any immediately available character events
+                loop {
+                    match event::poll(std::time::Duration::from_millis(0)) {
+                        Ok(true) => {
+                            if let Ok(Event::Key(next_key)) = event::read() {
+                                match next_key.code {
+                                    KeyCode::Char(next_c)
+                                        if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                                    {
+                                        chars.push(next_c);
+                                    }
+                                    _ => {
+                                        // Non-character or control key, stop batching and handle it next iteration
+                                        break;
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
+
+                // Log before consuming chars
+                let char_count = chars.len();
+
+                // Add all batched characters at once
+                let mut s = state.write().unwrap();
+                for ch in chars {
+                    // chars is moved here, which is fine
+                    s.token_input.push(ch);
+                }
+
+                if char_count > 1 {
+                    log_debug(&format!(
+                        "Batched {} characters (paste detected)",
+                        char_count
+                    ));
+                }
             }
             _ => {}
         }
@@ -281,14 +492,39 @@ impl EventHandler {
         }
     }
 
-    fn handle_enter(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
+    fn handle_enter(
+        &mut self,
+        state: Arc<RwLock<AppState>>,
+        list_state: &mut ListState,
+        base_url: Option<String>,
+    ) {
         let state_read = state.read().unwrap();
 
         // Check what view mode we're in
         if state_read.view_mode == ViewMode::Flat {
             // In flat mode: Execute request
-            // TODO: Execute request for selected endpoint
-            log_debug("Execute request in flat mode");
+            if let Some(endpoint) = state_read.endpoints.get(self.selected_index) {
+                let endpoint = endpoint.clone();
+
+                // Check if we have base_url configured
+                if let Some(base_url) = base_url {
+                    // Check if this endpoint is already executing
+                    if let Some(ref executing) = state_read.executing_endpoint {
+                        if executing == &endpoint.path {
+                            log_debug("Request already in progress for this endpoint");
+                            return;
+                        }
+                    }
+
+                    drop(state_read); // Release lock before spawning task
+
+                    log_debug(&format!("Executing: {} {}", endpoint.method, endpoint.path));
+                    crate::request::execute_request_background(state.clone(), endpoint, base_url);
+                } else {
+                    log_debug("Cannot execute: Base URL not configured");
+                    // TODO: Show error to user
+                }
+            }
         } else {
             // In grouped mode: Check if we're on a group header or endpoint
             if let Some(item) = state_read.render_items.get(self.selected_index) {
@@ -296,7 +532,7 @@ impl EventHandler {
                     RenderItem::GroupHeader { name, .. } => {
                         let group_name = name.clone();
 
-                        drop(state_read); // Release read lock
+                        drop(state_read);
                         let mut state_write = state.write().unwrap();
 
                         if state_write.expanded_groups.contains(&group_name) {
@@ -307,7 +543,6 @@ impl EventHandler {
                             log_debug(&format!("Expanded group: {}", group_name));
                         }
 
-                        // Validate selection is still in bounds
                         let visible_count = count_visible_items(&state_write);
                         if self.selected_index >= visible_count {
                             self.selected_index = visible_count.saturating_sub(1);
@@ -315,9 +550,30 @@ impl EventHandler {
                         }
                     }
                     RenderItem::Endpoint { endpoint } => {
-                        // Execute request for this endpoint
-                        log_debug(&format!("Execute: {} {}", endpoint.method, endpoint.path));
-                        // TODO: Actually execute request
+                        let endpoint = endpoint.clone();
+
+                        // Check if we have base_url configured
+                        if let Some(base_url) = base_url {
+                            // Check if this endpoint is already executing
+                            if let Some(ref executing) = state_read.executing_endpoint {
+                                if executing == &endpoint.path {
+                                    log_debug("Request already in progress for this endpoint");
+                                    return;
+                                }
+                            }
+
+                            drop(state_read);
+
+                            log_debug(&format!("Executing: {} {}", endpoint.method, endpoint.path));
+                            crate::request::execute_request_background(
+                                state.clone(),
+                                endpoint,
+                                base_url,
+                            );
+                        } else {
+                            log_debug("Cannot execute: Base URL not configured");
+                            // TODO: Show error to user
+                        }
                     }
                 }
             }

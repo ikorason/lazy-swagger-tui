@@ -269,7 +269,7 @@ pub fn render_details_panel(
     };
 
     let details_text = match &state.loading_state {
-        LoadingState::Fetching | LoadingState::Parsing => "Loading...".to_string(),
+        LoadingState::Fetching | LoadingState::Parsing => "Loading endpoints...".to_string(),
         LoadingState::Error(e) => format!("Error loading endpoints:\n\n{}", e),
         _ => {
             if let Some(endpoint) = selected_endpoint {
@@ -279,21 +279,67 @@ pub fn render_details_panel(
                     .map(|s| s.as_str())
                     .unwrap_or("No description");
 
-                format!(
-                    "{} {}\n\nSummary: {}\n\nParameters: None\n\n─────────────────────────\n\nPress [Enter] to execute request",
+                let mut output = format!(
+                    "{} {}\n\nSummary: {}\n\nParameters: None\n",
                     endpoint.method, endpoint.path, summary
-                )
+                );
+
+                // Add response section if available
+                if let Some(ref executing) = state.executing_endpoint {
+                    if executing == &endpoint.path {
+                        output.push_str("\n───────────────────────\n");
+                        output.push_str("⏳ Executing request...\n");
+                    }
+                }
+
+                if let Some(ref response) = state.current_response {
+                    output.push_str("\n───────────────────────\n");
+                    output.push_str("Response:\n\n");
+
+                    if response.is_error {
+                        output.push_str(&format!(
+                            "❌ Error\n\n{}\n",
+                            response
+                                .error_message
+                                .as_ref()
+                                .unwrap_or(&"Unknown error".to_string())
+                        ));
+                    } else {
+                        let status_color = if response.status >= 200 && response.status < 300 {
+                            "✓"
+                        } else if response.status >= 400 {
+                            "✗"
+                        } else {
+                            "•"
+                        };
+
+                        output.push_str(&format!(
+                            "{} Status: {} ({:.0}ms)\n\n{}\n",
+                            status_color,
+                            response.status,
+                            response.duration.as_millis(),
+                            response.body
+                        ));
+                    }
+                } else {
+                    output.push_str("\n───────────────────────\n");
+                    output.push_str("Press [Enter] to execute request");
+                }
+
+                output
             } else {
                 "No endpoint selected".to_string()
             }
         }
     };
 
-    let details = Paragraph::new(details_text).block(
-        Block::default()
-            .title("Details & Response")
-            .borders(Borders::ALL),
-    );
+    let details = Paragraph::new(details_text)
+        .wrap(Wrap { trim: true }) // Add wrapping for long responses
+        .block(
+            Block::default()
+                .title("Details & Response")
+                .borders(Borders::ALL),
+        );
 
     frame.render_widget(details, area);
 }
@@ -403,18 +449,8 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
     let label = Paragraph::new("Token:").style(Style::default().fg(Color::LightCyan));
     frame.render_widget(label, chunks[0]);
 
-    // Input field
-    let display_token = if state.token_input.len() > 50 {
-        format!(
-            "{}...{}",
-            &state.token_input[..20],
-            &state.token_input[state.token_input.len() - 20..]
-        )
-    } else {
-        state.token_input.clone()
-    };
-
-    let input = Paragraph::new(display_token).style(
+    // Input field - show full token while editing
+    let input = Paragraph::new(state.token_input.clone()).style(
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -491,7 +527,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
 
     let modal_width = (area.width as f32 * 0.7).min(90.0) as u16;
-    let modal_height = 9;
+    let modal_height = 12;
     let modal_x = (area.width.saturating_sub(modal_width)) / 2;
     let modal_y = (area.height.saturating_sub(modal_height)) / 2;
 
@@ -505,7 +541,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(Clear, modal_area);
 
     let block = Block::default()
-        .title(" Configure Swagger URL ")
+        .title(" Configure API URLs ")
         .borders(Borders::ALL)
         .border_style(
             Style::default()
@@ -520,35 +556,90 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // Title/description
-            Constraint::Length(1), // Label
-            Constraint::Length(1), // Input
+            Constraint::Length(2), // Description
+            Constraint::Length(1), // Swagger label
+            Constraint::Length(1), // Swagger input
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Base URL label
+            Constraint::Length(1), // Base URL input
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Help
         ])
         .split(inner);
 
     // Description
-    let desc = Paragraph::new("Enter the URL to your Swagger/OpenAPI specification.\nExample: http://localhost:5000/swagger/v1/swagger.json")
+    let desc = Paragraph::new("Enter your Swagger/OpenAPI spec URL. The base URL will be auto-detected.\nExample: http://localhost:5000/swagger/v1/swagger.json")
         .style(Style::default().fg(Color::Gray))
         .wrap(Wrap { trim: true });
     frame.render_widget(desc, chunks[0]);
 
-    // Label
-    let label = Paragraph::new("URL:").style(Style::default().fg(Color::LightCyan));
-    frame.render_widget(label, chunks[1]);
+    // Determine active field styles
+    use crate::types::UrlInputField;
+    let swagger_active = state.active_url_field == UrlInputField::SwaggerUrl;
+    let base_active = state.active_url_field == UrlInputField::BaseUrl;
 
-    // Input field
-    let input = Paragraph::new(state.url_input.clone()).style(
+    // Swagger URL label (with indicator if active)
+    let swagger_label_text = if swagger_active {
+        "► Swagger URL:"
+    } else {
+        "  Swagger URL:"
+    };
+    let swagger_label =
+        Paragraph::new(swagger_label_text).style(Style::default().fg(if swagger_active {
+            Color::Yellow
+        } else {
+            Color::LightCyan
+        }));
+    frame.render_widget(swagger_label, chunks[1]);
+
+    // Swagger URL input (highlighted if active)
+    let swagger_input = Paragraph::new(state.url_input.clone()).style(
         Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
+            .fg(if swagger_active {
+                Color::Yellow
+            } else {
+                Color::Gray
+            })
+            .add_modifier(if swagger_active {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            }),
     );
-    frame.render_widget(input, chunks[2]);
+    frame.render_widget(swagger_input, chunks[2]);
+
+    // Base URL label (with indicator if active)
+    let base_label_text = if base_active {
+        "► API Base URL:"
+    } else {
+        "  API Base URL:"
+    };
+    let base_label = Paragraph::new(base_label_text).style(Style::default().fg(if base_active {
+        Color::Yellow
+    } else {
+        Color::LightCyan
+    }));
+    frame.render_widget(base_label, chunks[4]);
+
+    // Base URL input (highlighted if active)
+    let base_input = Paragraph::new(state.base_url_input.clone()).style(
+        Style::default()
+            .fg(if base_active {
+                Color::Yellow
+            } else {
+                Color::Gray
+            })
+            .add_modifier(if base_active {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            }),
+    );
+    frame.render_widget(base_input, chunks[5]);
 
     // Help text
-    let help = Paragraph::new("Enter: Confirm  |  Esc: Cancel  |  'u': Change URL anytime")
+    let help = Paragraph::new("Tab: Switch fields  |  Enter: Confirm  |  Esc: Cancel")
         .style(Style::default().fg(Color::Rgb(150, 150, 150)))
         .alignment(Alignment::Center);
-    frame.render_widget(help, chunks[4]);
+    frame.render_widget(help, chunks[7]);
 }
