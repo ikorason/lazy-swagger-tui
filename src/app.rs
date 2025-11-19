@@ -98,6 +98,9 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
+        // Check if we need to initialize selection (do this before acquiring lock)
+        let should_select = self.list_state.selected().is_none();
+
         let state = self.state.read().unwrap();
 
         // Create main layout: Header, Body, Footer
@@ -126,6 +129,18 @@ impl App {
             state.endpoints.len(),
             &state.auth,
         );
+
+        // Ensure we have a selection if items exist
+        if should_select {
+            let has_items = match state.view_mode {
+                crate::types::ViewMode::Flat => !state.endpoints.is_empty(),
+                crate::types::ViewMode::Grouped => !state.render_items.is_empty(),
+            };
+
+            if has_items {
+                self.list_state.select(Some(0));
+            }
+        }
 
         // Render left panel (endpoints list)
         ui::render_endpoints_panel(

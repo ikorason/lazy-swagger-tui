@@ -65,10 +65,12 @@ You can edit this file directly or press `u` in the app to update URLs.
 
 | Key | Action |
 |-----|--------|
-| `↑↓` | Navigate endpoints |
-| `Enter` | Execute request (or expand/collapse groups) |
+| `Tab` | Switch between panels (Endpoints ↔ Details) |
+| `j` / `k` | Navigate endpoints or switch sections |
+| `Space` | Execute request or toggle section |
+| `Ctrl+d` / `Ctrl+u` | Scroll down/up in active section |
 | `g` / `G` | Toggle grouped/flat view |
-| `u` / `U` | Configure URLs |
+| `,` | Configure URLs |
 | `a` | Set/edit authentication token |
 | `A` | Clear authentication token |
 | `F5` | Refresh endpoints |

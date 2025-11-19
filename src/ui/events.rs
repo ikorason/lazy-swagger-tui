@@ -51,37 +51,228 @@ impl EventHandler {
                         KeyCode::Char('q') => {
                             self.should_quit = true;
                         }
+
                         KeyCode::Char('r') | KeyCode::Char('R') => {
                             should_fetch = self.handle_retry(state.clone());
                         }
+
                         KeyCode::Char('g') | KeyCode::Char('G') => {
                             self.handle_toggle_view(state.clone(), list_state);
                         }
+
                         KeyCode::Char('a') => {
                             self.handle_auth_dialog(state.clone());
                         }
+
                         KeyCode::Char('A') => {
                             self.handle_clear_token_request(state.clone());
                         }
-                        KeyCode::Char('u') | KeyCode::Char('U') => {
+
+                        KeyCode::Tab => {
+                            // Tab switches between left and right panels
+                            let mut s = state.write().unwrap();
+                            use crate::types::PanelFocus;
+
+                            s.panel_focus = match s.panel_focus {
+                                PanelFocus::EndpointsList => PanelFocus::Details,
+                                PanelFocus::Details => PanelFocus::EndpointsList,
+                            };
+                        }
+
+                        KeyCode::Char('j') => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            match panel {
+                                PanelFocus::EndpointsList => {
+                                    // Navigate down in endpoints list
+                                    self.handle_down(state.clone(), list_state);
+                                }
+                                PanelFocus::Details => {
+                                    // Move to next section (cycling)
+                                    let mut s = state.write().unwrap();
+                                    use crate::types::DetailsPanelFocus;
+
+                                    s.details_focus = match s.details_focus {
+                                        DetailsPanelFocus::EndpointDetails => {
+                                            DetailsPanelFocus::ResponseBody
+                                        }
+                                        DetailsPanelFocus::ResponseBody => {
+                                            DetailsPanelFocus::Headers
+                                        }
+                                        DetailsPanelFocus::Headers => {
+                                            DetailsPanelFocus::EndpointDetails
+                                        }
+                                    };
+                                }
+                            }
+                        }
+
+                        KeyCode::Char('k') => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            match panel {
+                                PanelFocus::EndpointsList => {
+                                    // Navigate up in endpoints list
+                                    self.handle_up(list_state);
+                                }
+                                PanelFocus::Details => {
+                                    // Move to previous section (cycling backward)
+                                    let mut s = state.write().unwrap();
+                                    use crate::types::DetailsPanelFocus;
+
+                                    s.details_focus = match s.details_focus {
+                                        DetailsPanelFocus::EndpointDetails => {
+                                            DetailsPanelFocus::Headers
+                                        }
+                                        DetailsPanelFocus::ResponseBody => {
+                                            DetailsPanelFocus::EndpointDetails
+                                        }
+                                        DetailsPanelFocus::Headers => {
+                                            DetailsPanelFocus::ResponseBody
+                                        }
+                                    };
+                                }
+                            }
+                        }
+
+                        KeyCode::Char('u')
+                            if key
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            // Ctrl+u: Scroll up in focused section
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            if panel == PanelFocus::Details {
+                                let mut s = state.write().unwrap();
+                                use crate::types::DetailsPanelFocus;
+
+                                match s.details_focus {
+                                    DetailsPanelFocus::ResponseBody => {
+                                        s.response_body_scroll =
+                                            s.response_body_scroll.saturating_sub(5);
+                                    }
+                                    DetailsPanelFocus::Headers => {
+                                        s.headers_scroll = s.headers_scroll.saturating_sub(5);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        KeyCode::Char('d')
+                            if key
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            // Ctrl+d: Scroll down in focused section
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            if panel == PanelFocus::Details {
+                                let mut s = state.write().unwrap();
+                                use crate::types::DetailsPanelFocus;
+
+                                match s.details_focus {
+                                    DetailsPanelFocus::ResponseBody => {
+                                        s.response_body_scroll =
+                                            s.response_body_scroll.saturating_add(5);
+                                    }
+                                    DetailsPanelFocus::Headers => {
+                                        s.headers_scroll = s.headers_scroll.saturating_add(5);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        KeyCode::Char(',') => {
                             self.handle_url_dialog(
                                 state.clone(),
                                 swagger_url.clone(),
                                 base_url.clone(),
                             );
                         }
+
+                        KeyCode::Char(' ') => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            match panel {
+                                PanelFocus::EndpointsList => {
+                                    // Space executes request or expands group
+                                    self.handle_enter(state.clone(), list_state, base_url.clone());
+                                }
+                                PanelFocus::Details => {
+                                    // Space toggles the focused section
+                                    let mut s = state.write().unwrap();
+                                    use crate::types::DetailsPanelFocus;
+
+                                    match s.details_focus {
+                                        DetailsPanelFocus::EndpointDetails => {
+                                            s.response_sections_expanded.endpoint_details =
+                                                !s.response_sections_expanded.endpoint_details;
+                                        }
+                                        DetailsPanelFocus::ResponseBody => {
+                                            s.response_sections_expanded.response_body =
+                                                !s.response_sections_expanded.response_body;
+                                        }
+                                        DetailsPanelFocus::Headers => {
+                                            s.response_sections_expanded.response_headers =
+                                                !s.response_sections_expanded.response_headers;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // keep arrow keys for accessibility (optional)
+                        KeyCode::Up => {
+                            // Only works when in EndpointsList
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+                            if panel == PanelFocus::EndpointsList {
+                                self.handle_up(list_state);
+                            }
+                        }
+
+                        KeyCode::Down => {
+                            // Only works when in EndpointsList
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+                            if panel == PanelFocus::EndpointsList {
+                                self.handle_down(state.clone(), list_state);
+                            }
+                        }
+
                         KeyCode::F(5) => {
                             should_fetch = true;
                         }
-                        KeyCode::Up => {
-                            self.handle_up(list_state);
-                        }
-                        KeyCode::Down => {
-                            self.handle_down(state.clone(), list_state);
-                        }
-                        KeyCode::Enter => {
-                            self.handle_enter(state.clone(), list_state, base_url.clone());
-                        }
+
                         _ => {}
                     },
                 }

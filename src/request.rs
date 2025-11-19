@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, ApiResponse};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// Executes an HTTP request for the given endpoint in the background
@@ -28,11 +29,15 @@ pub fn execute_request_background(
             let mut s = state.write().unwrap();
             s.executing_endpoint = None;
             s.current_response = Some(response);
+            s.response_body_scroll = 0; // Reset to top
+            s.headers_scroll = 0; // Reset to top
         }
     });
 }
 
 async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiResponse {
+    use std::time::Instant; // Add this import at the top
+
     // Get auth token if available
     let token = {
         let s = state.read().unwrap();
@@ -48,35 +53,65 @@ async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiRes
         request_builder = request_builder.bearer_auth(token);
     }
 
+    // Start timing the request
+    let start = Instant::now();
+
     // Execute request
     match request_builder.send().await {
         Ok(response) => {
+            let duration = start.elapsed(); // Capture duration immediately
+
             let status = response.status().as_u16();
+            let status_text = response
+                .status()
+                .canonical_reason()
+                .unwrap_or("Unknown")
+                .to_string();
+
+            // Extract headers (normalize keys to lowercase for consistency)
+            let headers: HashMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        key.as_str().to_lowercase(),
+                        value.to_str().unwrap_or("").to_string(),
+                    )
+                })
+                .collect();
 
             // Get response body as text
             match response.text().await {
                 Ok(body) => ApiResponse {
                     status,
+                    status_text,
+                    headers,
                     body,
-                    duration: std::time::Duration::from_secs(0), // Will be set by caller
+                    duration, // Use actual measured duration
                     is_error: false,
                     error_message: None,
                 },
                 Err(e) => ApiResponse {
                     status: 0,
+                    status_text: String::new(),
+                    headers: HashMap::new(),
                     body: String::new(),
-                    duration: std::time::Duration::from_secs(0),
+                    duration, // Even on error, show how long we waited
                     is_error: true,
                     error_message: Some(format!("Failed to read response body: {}", e)),
                 },
             }
         }
         Err(e) => {
-            // Network error or connection failure
+            let duration = start.elapsed(); // Capture duration for failed requests too
+
+            // Network error or connection failure (didn't get HTTP response)
             ApiResponse {
                 status: 0,
+                status_text: String::new(),
+                headers: HashMap::new(),
                 body: String::new(),
-                duration: std::time::Duration::from_secs(0),
+                duration,
                 is_error: true,
                 error_message: Some(format!("Request failed: {}", e)),
             }

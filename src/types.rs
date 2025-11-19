@@ -10,13 +10,30 @@ pub struct ApiEndpoint {
     pub tags: Vec<String>,
 }
 
+/// Represents an HTTP response from an API endpoint
 #[derive(Debug, Clone)]
 pub struct ApiResponse {
+    /// HTTP status code (200, 404, etc.)
     pub status: u16,
+
+    /// Human-readable status text ("OK", "Not Found", etc.)
+    pub status_text: String,
+
+    /// Response headers as key-value pairs (keys normalized to lowercase)
+    pub headers: HashMap<String, String>,
+
+    /// Raw response body (could be JSON, HTML, plain text, etc.)
     pub body: String,
+
+    /// Time taken to complete the request
     pub duration: Duration,
-    pub is_error: bool, // true for network errors, false for HTTP responses
-    pub error_message: Option<String>, // Only set if is_error = true
+
+    /// True if this was a network error (timeout, connection refused, etc.)
+    /// False if we got an HTTP response (even if 4xx/5xx)
+    pub is_error: bool,
+
+    /// Error message for network-level failures (only set when is_error = true)
+    pub error_message: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -126,4 +143,19 @@ fn mask_token(token: &str) -> String {
 pub struct UrlSubmission {
     pub swagger_url: String,
     pub base_url: Option<String>,
+}
+
+/// Tracks which main panel has focus
+#[derive(Debug, Clone, PartialEq)]
+pub enum PanelFocus {
+    EndpointsList, // Left panel
+    Details,       // Right panel
+}
+
+/// Tracks which section of the details panel has focus for scrolling
+#[derive(Debug, Clone, PartialEq)]
+pub enum DetailsPanelFocus {
+    EndpointDetails,
+    ResponseBody,
+    Headers,
 }
