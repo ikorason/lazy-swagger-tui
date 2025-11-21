@@ -1,5 +1,5 @@
 use crate::types::{
-    ApiEndpoint, ApiResponse, AuthState, DetailsPanelFocus, InputMode, LoadingState, PanelFocus,
+    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
     RenderItem, UrlInputField, ViewMode,
 };
 use std::collections::{HashMap, HashSet};
@@ -24,15 +24,11 @@ pub struct AppState {
     pub executing_endpoint: Option<String>,
     /// Response for currently selected endpoint
     pub current_response: Option<ApiResponse>,
-    /// Tracks which sections in the response panel are expanded/collapsed
-    /// This is global state shared across all endpoint responses
-    pub response_sections_expanded: ResponseSectionsState,
 
     /// Which main panel (left or right) has focus
     pub panel_focus: PanelFocus,
 
-    /// Which section of details panel has focus (only relevant when panel_focus = Details)
-    pub details_focus: DetailsPanelFocus,
+    pub active_detail_tab: DetailTab,
 
     /// Scroll offset for response body section (lines)
     pub response_body_scroll: usize,
@@ -59,9 +55,8 @@ impl Default for AppState {
             active_url_field: UrlInputField::SwaggerUrl,
             executing_endpoint: None,
             current_response: None,
-            response_sections_expanded: ResponseSectionsState::default(),
             panel_focus: PanelFocus::EndpointsList,
-            details_focus: DetailsPanelFocus::ResponseBody, // Start focused on response
+            active_detail_tab: DetailTab::Endpoint,
             response_body_scroll: 0,
             headers_scroll: 0,
         }
@@ -85,30 +80,6 @@ pub fn count_visible_items(state: &AppState) -> usize {
                 }
             }
             count
-        }
-    }
-}
-
-/// Tracks which sections of the response panel are expanded/collapsed
-/// This is global state - applies to all endpoints
-#[derive(Debug, Clone)]
-pub struct ResponseSectionsState {
-    /// Whether "Endpoint Details" section is expanded
-    pub endpoint_details: bool,
-
-    /// Whether "Response Body" section is expanded
-    pub response_body: bool,
-
-    /// Whether "Response Headers" section is expanded
-    pub response_headers: bool,
-}
-
-impl Default for ResponseSectionsState {
-    fn default() -> Self {
-        Self {
-            endpoint_details: true,  // Show endpoint info by default
-            response_body: true,     // Show response by default
-            response_headers: false, // Hide headers by default (reduce noise)
         }
     }
 }

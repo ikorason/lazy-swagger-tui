@@ -152,10 +152,10 @@ pub enum PanelFocus {
     Details,       // Right panel
 }
 
-/// Tracks which section of the details panel has focus for scrolling
+/// Tracks which tab is active in the Details panel
 #[derive(Debug, Clone, PartialEq)]
-pub enum DetailsPanelFocus {
-    EndpointDetails,
-    ResponseBody,
+pub enum DetailTab {
+    Endpoint,
     Headers,
+    Response,
 }

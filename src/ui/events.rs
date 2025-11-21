@@ -69,14 +69,54 @@ impl EventHandler {
                         }
 
                         KeyCode::Tab => {
-                            // Tab switches between left and right panels
                             let mut s = state.write().unwrap();
-                            use crate::types::PanelFocus;
+                            use crate::types::{DetailTab, PanelFocus};
 
-                            s.panel_focus = match s.panel_focus {
-                                PanelFocus::EndpointsList => PanelFocus::Details,
-                                PanelFocus::Details => PanelFocus::EndpointsList,
-                            };
+                            match s.panel_focus {
+                                PanelFocus::EndpointsList => {
+                                    // Move from Endpoints panel to Details panel (Endpoint tab)
+                                    s.panel_focus = PanelFocus::Details;
+                                    s.active_detail_tab = DetailTab::Endpoint;
+                                }
+                                PanelFocus::Details => {
+                                    // Cycle through tabs in Details panel
+                                    s.active_detail_tab = match s.active_detail_tab {
+                                        DetailTab::Endpoint => DetailTab::Headers,
+                                        DetailTab::Headers => DetailTab::Response,
+                                        DetailTab::Response => {
+                                            // Wrap back to Endpoints panel
+                                            s.panel_focus = PanelFocus::EndpointsList;
+                                            DetailTab::Endpoint // Reset to first tab for next time
+                                        }
+                                    };
+                                }
+                            }
+                        }
+
+                        KeyCode::BackTab => {
+                            // Shift+Tab (BackTab) - move left
+                            let mut s = state.write().unwrap();
+                            use crate::types::{DetailTab, PanelFocus};
+
+                            match s.panel_focus {
+                                PanelFocus::EndpointsList => {
+                                    // Move from Endpoints panel to Details panel (Response tab - rightmost)
+                                    s.panel_focus = PanelFocus::Details;
+                                    s.active_detail_tab = DetailTab::Response;
+                                }
+                                PanelFocus::Details => {
+                                    // Cycle backwards through tabs in Details panel
+                                    s.active_detail_tab = match s.active_detail_tab {
+                                        DetailTab::Response => DetailTab::Headers,
+                                        DetailTab::Headers => DetailTab::Endpoint,
+                                        DetailTab::Endpoint => {
+                                            // Wrap back to Endpoints panel
+                                            s.panel_focus = PanelFocus::EndpointsList;
+                                            DetailTab::Response // Reset for next time
+                                        }
+                                    };
+                                }
+                            }
                         }
 
                         KeyCode::Char('j') => {
@@ -92,21 +132,9 @@ impl EventHandler {
                                     self.handle_down(state.clone(), list_state);
                                 }
                                 PanelFocus::Details => {
-                                    // Move to next section (cycling)
-                                    let mut s = state.write().unwrap();
-                                    use crate::types::DetailsPanelFocus;
-
-                                    s.details_focus = match s.details_focus {
-                                        DetailsPanelFocus::EndpointDetails => {
-                                            DetailsPanelFocus::ResponseBody
-                                        }
-                                        DetailsPanelFocus::ResponseBody => {
-                                            DetailsPanelFocus::Headers
-                                        }
-                                        DetailsPanelFocus::Headers => {
-                                            DetailsPanelFocus::EndpointDetails
-                                        }
-                                    };
+                                    // TODO: Future - scroll content line by line
+                                    // For now, j/k do nothing in Details panel
+                                    // Use Ctrl+d/Ctrl+u for scrolling
                                 }
                             }
                         }
@@ -124,21 +152,9 @@ impl EventHandler {
                                     self.handle_up(list_state);
                                 }
                                 PanelFocus::Details => {
-                                    // Move to previous section (cycling backward)
-                                    let mut s = state.write().unwrap();
-                                    use crate::types::DetailsPanelFocus;
-
-                                    s.details_focus = match s.details_focus {
-                                        DetailsPanelFocus::EndpointDetails => {
-                                            DetailsPanelFocus::Headers
-                                        }
-                                        DetailsPanelFocus::ResponseBody => {
-                                            DetailsPanelFocus::EndpointDetails
-                                        }
-                                        DetailsPanelFocus::Headers => {
-                                            DetailsPanelFocus::ResponseBody
-                                        }
-                                    };
+                                    // TODO: Future - scroll content line by line
+                                    // For now, j/k do nothing in Details panel
+                                    // Use Ctrl+d/Ctrl+u for scrolling
                                 }
                             }
                         }
@@ -157,17 +173,19 @@ impl EventHandler {
 
                             if panel == PanelFocus::Details {
                                 let mut s = state.write().unwrap();
-                                use crate::types::DetailsPanelFocus;
+                                use crate::types::DetailTab;
 
-                                match s.details_focus {
-                                    DetailsPanelFocus::ResponseBody => {
+                                match s.active_detail_tab {
+                                    DetailTab::Response => {
                                         s.response_body_scroll =
                                             s.response_body_scroll.saturating_sub(5);
                                     }
-                                    DetailsPanelFocus::Headers => {
+                                    DetailTab::Headers => {
                                         s.headers_scroll = s.headers_scroll.saturating_sub(5);
                                     }
-                                    _ => {}
+                                    DetailTab::Endpoint => {
+                                        // Endpoint tab doesn't scroll
+                                    }
                                 }
                             }
                         }
@@ -186,17 +204,19 @@ impl EventHandler {
 
                             if panel == PanelFocus::Details {
                                 let mut s = state.write().unwrap();
-                                use crate::types::DetailsPanelFocus;
+                                use crate::types::DetailTab;
 
-                                match s.details_focus {
-                                    DetailsPanelFocus::ResponseBody => {
+                                match s.active_detail_tab {
+                                    DetailTab::Response => {
                                         s.response_body_scroll =
                                             s.response_body_scroll.saturating_add(5);
                                     }
-                                    DetailsPanelFocus::Headers => {
+                                    DetailTab::Headers => {
                                         s.headers_scroll = s.headers_scroll.saturating_add(5);
                                     }
-                                    _ => {}
+                                    DetailTab::Endpoint => {
+                                        // Endpoint tab doesn't scroll
+                                    }
                                 }
                             }
                         }
@@ -222,23 +242,52 @@ impl EventHandler {
                                     self.handle_enter(state.clone(), list_state, base_url.clone());
                                 }
                                 PanelFocus::Details => {
-                                    // Space toggles the focused section
-                                    let mut s = state.write().unwrap();
-                                    use crate::types::DetailsPanelFocus;
+                                    // Space in Details panel: Execute current endpoint again
+                                    let state_read = state.read().unwrap();
+                                    let view_mode = state_read.view_mode.clone();
 
-                                    match s.details_focus {
-                                        DetailsPanelFocus::EndpointDetails => {
-                                            s.response_sections_expanded.endpoint_details =
-                                                !s.response_sections_expanded.endpoint_details;
+                                    let selected_endpoint = match view_mode {
+                                        ViewMode::Flat => {
+                                            state_read.endpoints.get(self.selected_index).cloned()
                                         }
-                                        DetailsPanelFocus::ResponseBody => {
-                                            s.response_sections_expanded.response_body =
-                                                !s.response_sections_expanded.response_body;
+                                        ViewMode::Grouped => state_read
+                                            .render_items
+                                            .get(self.selected_index)
+                                            .and_then(|item| match item {
+                                                RenderItem::Endpoint { endpoint } => {
+                                                    Some(endpoint.clone())
+                                                }
+                                                RenderItem::GroupHeader { .. } => None,
+                                            }),
+                                    };
+
+                                    if let Some(endpoint) = selected_endpoint {
+                                        if let Some(base_url) = base_url.clone() {
+                                            // Check if already executing
+                                            if let Some(ref executing) =
+                                                state_read.executing_endpoint
+                                            {
+                                                if executing == &endpoint.path {
+                                                    log_debug("Request already in progress");
+                                                    return Ok((false, None));
+                                                }
+                                            }
+
+                                            drop(state_read);
+                                            log_debug(&format!(
+                                                "Re-executing: {} {}",
+                                                endpoint.method, endpoint.path
+                                            ));
+                                            crate::request::execute_request_background(
+                                                state.clone(),
+                                                endpoint,
+                                                base_url,
+                                            );
+                                        } else {
+                                            log_debug("Cannot execute: Base URL not configured");
                                         }
-                                        DetailsPanelFocus::Headers => {
-                                            s.response_sections_expanded.response_headers =
-                                                !s.response_sections_expanded.response_headers;
-                                        }
+                                    } else {
+                                        log_debug("No endpoint selected (group header or empty)");
                                     }
                                 }
                             }

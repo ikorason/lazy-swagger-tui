@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, AuthState, DetailsPanelFocus, LoadingState, RenderItem, ViewMode};
+use crate::types::{ApiEndpoint, AuthState, DetailTab, LoadingState, RenderItem, ViewMode};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::widgets::Wrap;
 use ratatui::{
@@ -256,7 +256,7 @@ pub fn render_details_panel(
     state: &AppState,
     selected_index: usize,
 ) {
-    // Get the selected endpoint (same logic as before)
+    // Get the selected endpoint
     let selected_endpoint = match state.view_mode {
         ViewMode::Flat => state.endpoints.get(selected_index),
         ViewMode::Grouped => state
@@ -302,338 +302,219 @@ pub fn render_details_panel(
         _ => {}
     }
 
-    let Some(endpoint) = selected_endpoint else {
-        let empty = Paragraph::new("No endpoint selected");
-        frame.render_widget(empty, inner_area);
-        return;
-    };
-
-    // Split into three sections: Details (auto), Response (main), Headers (auto)
-    // The response body gets the "remaining" space
-    render_three_section_layout(frame, inner_area, endpoint, state);
-}
-
-fn render_three_section_layout(
-    frame: &mut Frame,
-    area: Rect,
-    endpoint: &ApiEndpoint,
-    state: &AppState,
-) {
-    let sections = &state.response_sections_expanded;
-
-    // Calculate heights for each section
-    let details_height = if sections.endpoint_details {
-        calculate_details_section_height(endpoint)
-    } else {
-        1 // Just the header
-    };
-
-    let headers_height = if sections.response_headers {
-        calculate_headers_section_height(state)
-    } else {
-        1 // Just the header
-    };
-
-    // Calculate response height based on expanded state
-    let response_constraint = if sections.response_body {
-        Constraint::Min(10) // Expanded: take remaining space, min 10 lines
-    } else {
-        Constraint::Length(1) // Collapsed: just the header line
-    };
-
-    // Create layout: Details (fixed), Response (flexible), Headers (fixed)
+    // Split into: Tab bar (1 line) + Content area (rest)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(details_height),
-            response_constraint,
-            Constraint::Length(headers_height),
+            Constraint::Length(1), // Tab bar
+            Constraint::Min(0),    // Content area
         ])
-        .split(area);
+        .split(inner_area);
 
-    // Render each section
-    render_details_section(frame, chunks[0], endpoint, sections.endpoint_details, state);
-    render_response_section(frame, chunks[1], endpoint, state);
-    render_headers_section(frame, chunks[2], state);
-}
+    // Render tab bar
+    render_tab_bar(frame, chunks[0], state);
 
-/// Calculate how many lines the details section needs
-fn calculate_details_section_height(endpoint: &ApiEndpoint) -> u16 {
-    let mut height = 1; // Header line
-
-    if endpoint.summary.is_some() {
-        height += 3; // Method line + Summary line + spacing
+    // Render active tab content
+    if let Some(endpoint) = selected_endpoint {
+        match state.active_detail_tab {
+            DetailTab::Endpoint => render_endpoint_tab(frame, chunks[1], endpoint),
+            DetailTab::Headers => render_headers_tab(frame, chunks[1], state),
+            DetailTab::Response => render_response_tab(frame, chunks[1], endpoint, state),
+        }
     } else {
-        height += 2; // Method line + spacing
+        // No endpoint selected
+        let empty =
+            Paragraph::new("No endpoint selected").style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(empty, chunks[1]);
     }
-
-    height
 }
 
-/// Calculate how many lines the headers section needs
-fn calculate_headers_section_height(state: &AppState) -> u16 {
-    let header_count = state
-        .current_response
-        .as_ref()
-        .map(|r| r.headers.len())
-        .unwrap_or(0);
+/// Render the tab bar showing [ Endpoint ] [ Headers ] [ Response ]
+fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
+    let active_tab = &state.active_detail_tab;
 
-    if header_count == 0 {
-        return 2; // Header + "No headers" message
-    }
+    // Check if request is executing
+    let is_executing = state.executing_endpoint.is_some();
 
-    // Header line + headers + some padding, max 15 lines
-    let height = 1 + header_count + 1;
-    height.min(15) as u16
+    // Build tab labels with highlighting
+    let endpoint_style = if *active_tab == DetailTab::Endpoint {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let headers_style = if *active_tab == DetailTab::Headers {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let response_label = if is_executing {
+        "Response (...)"
+    } else {
+        "Response"
+    };
+
+    let response_style = if *active_tab == DetailTab::Response {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let tabs = Line::from(vec![
+        Span::styled("[ ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Endpoint", endpoint_style),
+        Span::styled(" ] [ ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Headers", headers_style),
+        Span::styled(" ] [ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(response_label, response_style),
+        Span::styled(" ]", Style::default().fg(Color::DarkGray)),
+    ]);
+
+    let tab_bar = Paragraph::new(tabs);
+    frame.render_widget(tab_bar, area);
 }
 
-/// Render the endpoint details section
-fn render_details_section(
-    frame: &mut Frame,
-    area: Rect,
-    endpoint: &ApiEndpoint,
-    is_expanded: bool,
-    state: &AppState,
-) {
+/// Render the Endpoint tab content
+fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint) {
     let mut lines: Vec<Line> = Vec::new();
 
-    // Header
-    let icon = if is_expanded { "▼" } else { "▶" };
-    let is_focused = state.details_focus == DetailsPanelFocus::EndpointDetails;
+    let method_color = get_method_color(&endpoint.method);
 
-    lines.push(Line::from(vec![Span::styled(
-        format!("{} Endpoint Details", icon),
-        Style::default()
-            .fg(if is_focused {
-                Color::Cyan
-            } else {
-                Color::Yellow
-            })
-            .add_modifier(Modifier::BOLD),
-    )]));
+    lines.push(Line::from(vec![
+        Span::styled(
+            &endpoint.method,
+            Style::default()
+                .fg(method_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::raw(&endpoint.path),
+    ]));
 
-    if is_expanded {
-        let method_color = get_method_color(&endpoint.method);
+    lines.push(Line::from("")); // Empty line
+
+    if let Some(summary) = &endpoint.summary {
         lines.push(Line::from(vec![
-            Span::raw("  "),
-            Span::styled(
-                &endpoint.method,
-                Style::default()
-                    .fg(method_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" "),
-            Span::raw(&endpoint.path),
+            Span::styled("Summary: ", Style::default().fg(Color::Cyan)),
+            Span::raw(summary),
         ]));
-
-        if let Some(summary) = &endpoint.summary {
-            lines.push(Line::from(vec![
-                Span::raw("  Summary: "),
-                Span::raw(summary),
-            ]));
-        }
     }
 
-    let content = Paragraph::new(lines).wrap(Wrap { trim: false });
+    if !endpoint.tags.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Tags: ", Style::default().fg(Color::Cyan)),
+            Span::raw(endpoint.tags.join(", ")),
+        ]));
+    }
+
+    let content = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .style(Style::default().fg(Color::White));
+
     frame.render_widget(content, area);
 }
 
-fn render_response_section(
-    frame: &mut Frame,
-    area: Rect,
-    endpoint: &ApiEndpoint,
-    state: &AppState,
-) {
-    let sections = &state.response_sections_expanded;
+/// Render the Headers tab content
+fn render_headers_tab(frame: &mut Frame, area: Rect, state: &AppState) {
+    let mut lines: Vec<Line> = Vec::new();
 
-    // Split area into: header line + content area
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // Header line
-            Constraint::Min(0),    // Content area
-        ])
-        .split(area);
+    if let Some(ref response) = state.current_response {
+        if !response.headers.is_empty() {
+            let mut header_vec: Vec<_> = response.headers.iter().collect();
+            header_vec.sort_by_key(|(k, _)| k.as_str());
 
-    // Render header (always visible)
-    let is_executing = state.executing_endpoint.as_ref() == Some(&endpoint.path);
-    let is_focused = state.details_focus == DetailsPanelFocus::ResponseBody;
-
-    let icon = if sections.response_body { "▼" } else { "▶" };
-
-    let response_title = if let Some(ref resp) = state.current_response {
-        if resp.is_error {
-            format!("{} Response (Error)", icon)
-        } else {
-            format!(
-                "{} Response ({} {} - {}ms)",
-                icon,
-                resp.status,
-                resp.status_text,
-                resp.duration.as_millis()
-            )
-        }
-    } else if is_executing {
-        format!("{} Response (Executing...)", icon)
-    } else {
-        format!("{} Response", icon)
-    };
-
-    let header = Paragraph::new(Line::from(vec![Span::styled(
-        response_title,
-        Style::default()
-            .fg(if is_focused {
-                Color::Cyan
-            } else {
-                Color::Yellow
-            })
-            .add_modifier(Modifier::BOLD),
-    )]));
-
-    frame.render_widget(header, chunks[0]);
-
-    // Build content lines (without header)
-    let mut content_lines: Vec<Line> = Vec::new();
-
-    if sections.response_body {
-        if is_executing {
-            content_lines.push(Line::from(vec![
-                Span::raw("  "),
-                Span::styled("⏳ Executing request...", Style::default().fg(Color::Cyan)),
-            ]));
-        } else if let Some(ref response) = state.current_response {
-            if response.is_error {
-                content_lines.push(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(
-                        "❌ Error",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
-                ]));
-                content_lines.push(Line::from(""));
-
-                if let Some(ref err_msg) = response.error_message {
-                    for line in err_msg.lines() {
-                        content_lines.push(Line::from(vec![
-                            Span::raw("  "),
-                            Span::styled(line.to_string(), Style::default().fg(Color::Red)),
-                        ]));
-                    }
-                }
-            } else {
-                let formatted_body = try_format_json(&response.body);
-                for line in formatted_body.lines() {
-                    content_lines.push(Line::from(vec![
-                        Span::raw("  "),
-                        Span::raw(line.to_string()),
-                    ]));
-                }
-            }
-        } else {
-            content_lines.push(Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    "Press [Space] to execute request",
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-    }
-
-    // Render scrollable content
-    let content = Paragraph::new(content_lines)
-        .wrap(Wrap { trim: false })
-        .scroll((state.response_body_scroll as u16, 0));
-
-    frame.render_widget(content, chunks[1]);
-}
-
-fn render_headers_section(frame: &mut Frame, area: Rect, state: &AppState) {
-    let sections = &state.response_sections_expanded;
-
-    // Split area into: header line + content area
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // Header line
-            Constraint::Min(0),    // Content area
-        ])
-        .split(area);
-
-    // Render header (always visible)
-    let is_focused = state.details_focus == DetailsPanelFocus::Headers;
-
-    let icon = if sections.response_headers {
-        "▼"
-    } else {
-        "▶"
-    };
-
-    let headers_count = state
-        .current_response
-        .as_ref()
-        .map(|r| r.headers.len())
-        .unwrap_or(0);
-
-    let headers_title = if headers_count > 0 {
-        format!("{} Headers ({})", icon, headers_count)
-    } else {
-        format!("{} Headers", icon)
-    };
-
-    let header = Paragraph::new(Line::from(vec![Span::styled(
-        headers_title,
-        Style::default()
-            .fg(if is_focused {
-                Color::Cyan
-            } else {
-                if headers_count > 0 {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                }
-            })
-            .add_modifier(Modifier::BOLD),
-    )]));
-
-    frame.render_widget(header, chunks[0]);
-
-    // Build content lines (without header)
-    let mut content_lines: Vec<Line> = Vec::new();
-
-    if sections.response_headers {
-        if let Some(ref response) = state.current_response {
-            if !response.headers.is_empty() {
-                let mut header_vec: Vec<_> = response.headers.iter().collect();
-                header_vec.sort_by_key(|(k, _)| k.as_str());
-
-                for (key, value) in header_vec {
-                    content_lines.push(Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled(format!("{}: ", key), Style::default().fg(Color::Cyan)),
-                        Span::raw(value.to_string()),
-                    ]));
-                }
-            } else {
-                content_lines.push(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled("No headers", Style::default().fg(Color::DarkGray)),
+            for (key, value) in header_vec {
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{}: ", key), Style::default().fg(Color::Cyan)),
+                    Span::raw(value.to_string()),
                 ]));
             }
         } else {
-            content_lines.push(Line::from(vec![
-                Span::raw("  "),
-                Span::styled("No response yet", Style::default().fg(Color::DarkGray)),
-            ]));
+            lines.push(Line::from(Span::styled(
+                "No headers",
+                Style::default().fg(Color::DarkGray),
+            )));
         }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "No response yet",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
-    // Render scrollable content
-    let content = Paragraph::new(content_lines)
+    let content = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
         .scroll((state.headers_scroll as u16, 0));
 
-    frame.render_widget(content, chunks[1]);
+    frame.render_widget(content, area);
+}
+
+/// Render the Response tab content
+fn render_response_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, state: &AppState) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    let is_executing = state.executing_endpoint.as_ref() == Some(&endpoint.path);
+
+    if is_executing {
+        lines.push(Line::from(vec![Span::styled(
+            "⏳ Executing request...",
+            Style::default().fg(Color::Cyan),
+        )]));
+    } else if let Some(ref response) = state.current_response {
+        if response.is_error {
+            lines.push(Line::from(vec![Span::styled(
+                "❌ Error",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )]));
+            lines.push(Line::from(""));
+
+            if let Some(ref err_msg) = response.error_message {
+                for line in err_msg.lines() {
+                    lines.push(Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default().fg(Color::Red),
+                    )));
+                }
+            }
+        } else {
+            // Show status line
+            lines.push(Line::from(vec![
+                Span::styled("Status: ", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{} {}", response.status, response.status_text),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::raw("  "),
+                Span::styled("Duration: ", Style::default().fg(Color::Cyan)),
+                Span::raw(format!("{}ms", response.duration.as_millis())),
+            ]));
+            lines.push(Line::from("")); // Empty line
+
+            // Show formatted body
+            let formatted_body = try_format_json(&response.body);
+            for line in formatted_body.lines() {
+                lines.push(Line::from(line.to_string()));
+            }
+        }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "Press [Space] to execute request",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let content = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((state.response_body_scroll as u16, 0));
+
+    frame.render_widget(content, area);
 }
 
 pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
