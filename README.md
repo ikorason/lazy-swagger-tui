@@ -88,10 +88,8 @@ Endpoints Panel → Endpoint Tab → Headers Tab → Response Tab → (wraps bac
 | `Shift+Tab` | Move left (panel → panel, tab → tab) |
 | `,` | Configure URLs |
 | `a` | Set/edit authentication token |
-| `A` | Clear authentication token |
-| `F5` | Refresh endpoints |
-| `r` / `R` | Retry after error |
-| `g` / `G` | Toggle grouped/flat view |
+| `r` | Retry after error |
+| `g` | Toggle grouped/flat view |
 | `q` | Quit |
 
 ### Endpoints Panel (Left Side)
@@ -100,7 +98,7 @@ Endpoints Panel → Endpoint Tab → Headers Tab → Response Tab → (wraps bac
 |-----|--------|
 | `j` / `k` | Navigate up/down through endpoints |
 | `↑` / `↓` | Navigate up/down (alternative) |
-| `Ctrl+d` / `Ctrl+u` | Scroll half-page down/up |
+| `Ctrl+d` / `Ctrl+u` | Scroll half-page down/up in detail panels |
 | `Space` | Execute selected endpoint or toggle group |
 
 ### Details Panel (Right Side)
