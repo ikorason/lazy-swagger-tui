@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, AuthState, DetailTab, LoadingState, RenderItem, ViewMode};
+use crate::types::{
+    ApiEndpoint, AuthState, DetailTab, LoadingState, Parameter, RenderItem, RequestEditMode,
+    ViewMode,
+};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::widgets::Wrap;
 use ratatui::{
@@ -318,6 +323,7 @@ pub fn render_details_panel(
     if let Some(endpoint) = selected_endpoint {
         match state.active_detail_tab {
             DetailTab::Endpoint => render_endpoint_tab(frame, chunks[1], endpoint),
+            DetailTab::Request => render_request_tab(frame, chunks[1], endpoint, state),
             DetailTab::Headers => render_headers_tab(frame, chunks[1], state),
             DetailTab::Response => render_response_tab(frame, chunks[1], endpoint, state),
         }
@@ -338,6 +344,14 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 
     // Build tab labels with highlighting
     let endpoint_style = if *active_tab == DetailTab::Endpoint {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let request_style = if *active_tab == DetailTab::Request {
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
@@ -370,6 +384,8 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
     let tabs = Line::from(vec![
         Span::styled("[ ", Style::default().fg(Color::DarkGray)),
         Span::styled("Endpoint", endpoint_style),
+        Span::styled(" ] [ ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Request", request_style), // NEW
         Span::styled(" ] [ ", Style::default().fg(Color::DarkGray)),
         Span::styled("Headers", headers_style),
         Span::styled(" ] [ ", Style::default().fg(Color::DarkGray)),
@@ -419,6 +435,195 @@ fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint) {
         .style(Style::default().fg(Color::White));
 
     frame.render_widget(content, area);
+}
+
+/// Render the Request tab content (parameters, etc.)
+fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, state: &AppState) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Get query parameters for this endpoint
+    let query_params: Vec<&Parameter> = endpoint
+        .parameters
+        .iter()
+        .filter(|p| p.location == "query")
+        .collect();
+
+    if query_params.is_empty() {
+        // No query parameters
+        lines.push(Line::from(Span::styled(
+            "No query parameters defined for this endpoint",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        // Title
+        lines.push(Line::from(Span::styled(
+            "Query Parameters:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from("")); // Empty line
+
+        // Get request config for this endpoint
+        let config = state.request_configs.get(&endpoint.path);
+
+        // Display each parameter
+        for (idx, param) in query_params.iter().enumerate() {
+            // ... existing parameter rendering code ...
+
+            let current_value =
+                if let RequestEditMode::Editing(editing_param_name) = &state.request_edit_mode {
+                    if editing_param_name == &param.name {
+                        state.param_edit_buffer.as_str()
+                    } else {
+                        config
+                            .and_then(|c| c.query_params.get(&param.name))
+                            .map(|s| s.as_str())
+                            .unwrap_or("")
+                    }
+                } else {
+                    config
+                        .and_then(|c| c.query_params.get(&param.name))
+                        .map(|s| s.as_str())
+                        .unwrap_or("")
+                };
+
+            let is_selected = state.selected_param_index == idx;
+            let is_editing = matches!(
+                &state.request_edit_mode,
+                RequestEditMode::Editing(name) if name == &param.name
+            );
+
+            let line = build_param_line(param, current_value, is_selected, is_editing);
+            lines.push(line);
+        }
+
+        // ADD URL PREVIEW SECTION
+        lines.push(Line::from("")); // Empty line
+        lines.push(Line::from(Span::styled(
+            "Preview URL:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )));
+
+        // Build preview URL
+        let preview_url = if let Some(config) = config {
+            build_preview_url(&endpoint.path, &config.query_params)
+        } else {
+            endpoint.path.clone()
+        };
+
+        lines.push(Line::from(Span::styled(
+            preview_url,
+            Style::default().fg(Color::Yellow),
+        )));
+
+        // Add help text at bottom
+        lines.push(Line::from("")); // Empty line
+
+        let help_text = match &state.request_edit_mode {
+            RequestEditMode::Viewing => "j/k: Navigate  |  e: Edit parameter  |  Space: Execute",
+            RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
+        };
+
+        lines.push(Line::from(Span::styled(
+            help_text,
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let content = Paragraph::new(lines).wrap(Wrap { trim: false });
+    frame.render_widget(content, area);
+}
+
+// Add this helper function at the end of draw.rs
+fn build_preview_url(path: &str, query_params: &HashMap<String, String>) -> String {
+    let non_empty_params: Vec<String> = query_params
+        .iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect();
+
+    if non_empty_params.is_empty() {
+        path.to_string()
+    } else {
+        format!("{}?{}", path, non_empty_params.join("&"))
+    }
+}
+
+/// Helper function to build a single parameter line with styling
+fn build_param_line(
+    param: &Parameter,
+    current_value: &str,
+    is_selected: bool,
+    is_editing: bool,
+) -> Line<'static> {
+    // Build type info string (e.g., "integer/int32" or "boolean")
+    let type_info = if let Some(schema) = &param.schema {
+        let type_str = schema.param_type.as_deref().unwrap_or("unknown");
+        if let Some(format) = &schema.format {
+            format!("{}/{}", type_str, format)
+        } else {
+            type_str.to_string()
+        }
+    } else {
+        "unknown".to_string()
+    };
+
+    // Build required indicator
+    let required_str = if param.required.unwrap_or(false) {
+        "*"
+    } else {
+        ""
+    };
+
+    // Selection indicator
+    let indicator = if is_selected { "→ " } else { "  " };
+
+    // Value display - show cursor if editing
+    let value_display = if is_editing {
+        format!("[{}▊]", current_value) // Show cursor
+    } else if current_value.is_empty() {
+        "[_____]".to_string() // Empty placeholder
+    } else {
+        format!("[{}]", current_value)
+    };
+
+    // Build the line with appropriate styling
+    let indicator_style = if is_selected {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let name_style = if is_selected {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let value_style = if is_editing {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else if is_selected {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+
+    let meta_style = Style::default().fg(Color::DarkGray);
+
+    Line::from(vec![
+        Span::styled(indicator, indicator_style),
+        Span::styled(format!("{}{}: ", param.name, required_str), name_style),
+        Span::styled(value_display, value_style),
+        Span::raw("  "),
+        Span::styled(format!("({})", type_info), meta_style),
+    ])
 }
 
 /// Render the Headers tab content
@@ -520,10 +725,10 @@ fn render_response_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, st
 pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
     let footer_text = match view_mode {
         ViewMode::Flat => {
-            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | G:Group ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Group ,:URL a:Auth q:Quit"
         }
         ViewMode::Grouped => {
-            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | G:Ungroup ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Ungroup ,:URL a:Auth q:Quit"
         }
     };
 

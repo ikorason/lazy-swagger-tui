@@ -1,3 +1,5 @@
+use url::Url;
+
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, ApiResponse};
 use std::collections::HashMap;
@@ -18,8 +20,34 @@ pub fn execute_request_background(
 
     // Spawn background task
     tokio::spawn(async move {
-        // Build the full URL
-        let full_url = format!("{}{}", base_url.trim_end_matches('/'), endpoint.path);
+        // Get query parameters from request config
+        let query_params = {
+            let s = state.read().unwrap();
+            s.request_configs
+                .get(&endpoint.path)
+                .map(|config| config.query_params.clone())
+                .unwrap_or_default()
+        };
+
+        // Build the full URL with query parameters
+        let full_url = match build_url_with_params(&base_url, &endpoint.path, &query_params) {
+            Ok(url) => url,
+            Err(e) => {
+                // Handle URL building error
+                let mut s = state.write().unwrap();
+                s.executing_endpoint = None;
+                s.current_response = Some(ApiResponse {
+                    status: 0,
+                    status_text: String::new(),
+                    headers: HashMap::new(),
+                    body: String::new(),
+                    duration: std::time::Duration::from_secs(0),
+                    is_error: true,
+                    error_message: Some(format!("Failed to build URL: {}", e)),
+                });
+                return;
+            }
+        };
 
         // Build and execute request
         let response = execute_get_request(&full_url, &state).await;
@@ -117,4 +145,26 @@ async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiRes
             }
         }
     }
+}
+
+/// Build a full URL with query parameters
+fn build_url_with_params(
+    base_url: &str,
+    path: &str,
+    query_params: &HashMap<String, String>,
+) -> Result<String, String> {
+    // Start with base URL + path
+    let full_path = format!("{}{}", base_url.trim_end_matches('/'), path);
+
+    // Parse as URL
+    let mut url = Url::parse(&full_path).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    // Add query parameters (only non-empty ones)
+    for (key, value) in query_params {
+        if !value.is_empty() {
+            url.query_pairs_mut().append_pair(key, value);
+        }
+    }
+
+    Ok(url.to_string())
 }

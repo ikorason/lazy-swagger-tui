@@ -1,6 +1,6 @@
 use crate::types::{
-    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
-    RenderItem, UrlInputField, ViewMode,
+    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus, Parameter,
+    RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -35,6 +35,18 @@ pub struct AppState {
 
     /// Scroll offset for headers section (lines)
     pub headers_scroll: usize,
+
+    /// Request configurations per endpoint path
+    pub request_configs: HashMap<String, RequestConfig>,
+
+    /// Which parameter is currently selected (for j/k navigation)
+    pub selected_param_index: usize,
+
+    /// Are we viewing or editing a parameter?
+    pub request_edit_mode: RequestEditMode,
+
+    /// Temporary buffer while editing a param value
+    pub param_edit_buffer: String,
 }
 
 impl Default for AppState {
@@ -59,7 +71,61 @@ impl Default for AppState {
             active_detail_tab: DetailTab::Endpoint,
             response_body_scroll: 0,
             headers_scroll: 0,
+            request_configs: HashMap::new(),
+            selected_param_index: 0,
+            request_edit_mode: RequestEditMode::Viewing,
+            param_edit_buffer: String::new(),
         }
+    }
+}
+
+impl AppState {
+    /// Get or create request config for an endpoint, initializing with Swagger defaults
+    pub fn get_or_create_request_config(&mut self, endpoint: &ApiEndpoint) -> &mut RequestConfig {
+        self.request_configs
+            .entry(endpoint.path.clone())
+            .or_insert_with(|| {
+                let mut config = RequestConfig::default();
+
+                // Initialize with defaults from Swagger parameters
+                for param in &endpoint.parameters {
+                    if param.location == "query" {
+                        if let Some(schema) = &param.schema {
+                            if let Some(default) = &schema.default {
+                                let default_str = json_value_to_string(default);
+                                config.query_params.insert(param.name.clone(), default_str);
+                            }
+                        }
+
+                        // If no default but param exists, insert empty string
+                        // so it shows up in the UI
+                        config
+                            .query_params
+                            .entry(param.name.clone())
+                            .or_insert_with(String::new);
+                    }
+                }
+
+                config
+            })
+    }
+
+    /// Get list of query parameters for an endpoint (in order)
+    pub fn get_query_params_list<'a>(&self, endpoint: &'a ApiEndpoint) -> Vec<&'a Parameter> {
+        endpoint
+            .parameters
+            .iter()
+            .filter(|p| p.location == "query")
+            .collect()
+    }
+}
+
+fn json_value_to_string(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        _ => value.to_string(),
     }
 }
 

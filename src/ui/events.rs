@@ -1,9 +1,13 @@
 use crate::config;
+use crate::request::execute_request_background;
 use crate::state::{AppState, count_visible_items};
-use crate::types::{InputMode, RenderItem, UrlInputField, UrlSubmission, ViewMode};
+use crate::types::{
+    DetailTab, InputMode, PanelFocus, RenderItem, RequestConfig, RequestEditMode, UrlInputField,
+    UrlSubmission, ViewMode,
+};
 
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::widgets::ListState;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -41,130 +45,179 @@ impl EventHandler {
                     InputMode::EnteringUrl => {
                         url_submitted = self.handle_url_input(key, state.clone())?;
                     }
+
                     InputMode::EnteringToken => {
                         self.handle_token_input(key, state.clone())?;
                     }
+
                     InputMode::ConfirmClearToken => {
                         self.handle_clear_confirmation(key, state.clone())?;
                     }
+
                     InputMode::Normal => match key.code {
+                        // QUIT
                         KeyCode::Char('q') => {
-                            self.should_quit = true;
-                        }
+                            // Don't quit if we're editing a parameter
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
 
-                        KeyCode::Char('r') | KeyCode::Char('R') => {
-                            should_fetch = self.handle_retry(state.clone());
-                        }
-
-                        KeyCode::Char('g') | KeyCode::Char('G') => {
-                            self.handle_toggle_view(state.clone(), list_state);
-                        }
-
-                        KeyCode::Char('a') => {
-                            self.handle_auth_dialog(state.clone());
-                        }
-
-                        KeyCode::Char('A') => {
-                            self.handle_clear_token_request(state.clone());
-                        }
-
-                        KeyCode::Tab => {
-                            let mut s = state.write().unwrap();
-                            use crate::types::{DetailTab, PanelFocus};
-
-                            match s.panel_focus {
-                                PanelFocus::EndpointsList => {
-                                    // Move from Endpoints panel to Details panel (Endpoint tab)
-                                    s.panel_focus = PanelFocus::Details;
-                                    s.active_detail_tab = DetailTab::Endpoint;
-                                }
-                                PanelFocus::Details => {
-                                    // Cycle through tabs in Details panel
-                                    s.active_detail_tab = match s.active_detail_tab {
-                                        DetailTab::Endpoint => DetailTab::Headers,
-                                        DetailTab::Headers => DetailTab::Response,
-                                        DetailTab::Response => {
-                                            // Wrap back to Endpoints panel
-                                            s.panel_focus = PanelFocus::EndpointsList;
-                                            DetailTab::Endpoint // Reset to first tab for next time
-                                        }
-                                    };
-                                }
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'q' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('q');
+                            } else {
+                                // Not editing - quit the app
+                                self.should_quit = true;
                             }
                         }
-
-                        KeyCode::BackTab => {
-                            // Shift+Tab (BackTab) - move left
-                            let mut s = state.write().unwrap();
-                            use crate::types::{DetailTab, PanelFocus};
-
-                            match s.panel_focus {
-                                PanelFocus::EndpointsList => {
-                                    // Move from Endpoints panel to Details panel (Response tab - rightmost)
-                                    s.panel_focus = PanelFocus::Details;
-                                    s.active_detail_tab = DetailTab::Response;
-                                }
-                                PanelFocus::Details => {
-                                    // Cycle backwards through tabs in Details panel
-                                    s.active_detail_tab = match s.active_detail_tab {
-                                        DetailTab::Response => DetailTab::Headers,
-                                        DetailTab::Headers => DetailTab::Endpoint,
-                                        DetailTab::Endpoint => {
-                                            // Wrap back to Endpoints panel
-                                            s.panel_focus = PanelFocus::EndpointsList;
-                                            DetailTab::Response // Reset for next time
-                                        }
-                                    };
-                                }
-                            }
-                        }
-
+                        // nav down
                         KeyCode::Char('j') => {
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
 
-                            match panel {
-                                PanelFocus::EndpointsList => {
-                                    // Navigate down in endpoints list
-                                    self.handle_down(state.clone(), list_state);
-                                }
-                                PanelFocus::Details => {
-                                    // TODO: Future - scroll content line by line
-                                    // For now, j/k do nothing in Details panel
-                                    // Use Ctrl+d/Ctrl+u for scrolling
+                            // If editing a parameter, treat as character input
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('j');
+                            } else {
+                                // Not editing - handle navigation
+                                match panel {
+                                    PanelFocus::EndpointsList => {
+                                        // Navigate down in endpoints list
+                                        self.handle_down(state.clone(), list_state);
+                                    }
+                                    PanelFocus::Details => {
+                                        // If on Request tab and in Viewing mode, navigate params
+                                        if active_tab == DetailTab::Request {
+                                            self.handle_request_param_down(state.clone());
+                                        }
+                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                    }
                                 }
                             }
                         }
-
+                        // nav up
                         KeyCode::Char('k') => {
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
 
-                            match panel {
-                                PanelFocus::EndpointsList => {
-                                    // Navigate up in endpoints list
-                                    self.handle_up(list_state);
-                                }
-                                PanelFocus::Details => {
-                                    // TODO: Future - scroll content line by line
-                                    // For now, j/k do nothing in Details panel
-                                    // Use Ctrl+d/Ctrl+u for scrolling
+                            // If editing a parameter, treat as character input
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('k');
+                            } else {
+                                // Not editing - handle navigation
+                                match panel {
+                                    PanelFocus::EndpointsList => {
+                                        // Navigate up in endpoints list
+                                        self.handle_up(state.clone(), list_state);
+                                    }
+                                    PanelFocus::Details => {
+                                        // If on Request tab and in Viewing mode, navigate params
+                                        if active_tab == DetailTab::Request {
+                                            self.handle_request_param_up(state.clone());
+                                        }
+                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                    }
                                 }
                             }
                         }
+                        // handle auth dialog
+                        KeyCode::Char('a') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
 
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'a' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('a');
+                            } else {
+                                // Not editing - auth dialog
+                                self.handle_auth_dialog(state.clone());
+                            }
+                        }
+                        // edit param
+                        KeyCode::Char('e') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'e' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('e');
+                            } else {
+                                // Only handle if on Details panel and Request tab
+                                if panel == PanelFocus::Details && active_tab == DetailTab::Request
+                                {
+                                    self.handle_request_param_edit(state.clone());
+                                }
+                            }
+                        }
+                        // toggle view - list <-> grouped
+                        KeyCode::Char('g') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'g' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('g');
+                            } else {
+                                self.handle_toggle_view(state.clone(), list_state);
+                            }
+                        }
+                        // config url
+                        KeyCode::Char(',') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat ',' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push(',');
+                            } else {
+                                self.handle_url_dialog(
+                                    state.clone(),
+                                    swagger_url.clone(),
+                                    base_url.clone(),
+                                );
+                            }
+                        }
+
+                        // ctrl + modifiers
+                        // retry
+                        KeyCode::Char('r')
+                            if key
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            should_fetch = self.handle_retry(state.clone());
+                        }
+
+                        // -- with modifiers
+                        // Ctrl+u: Scroll up in focused section
                         KeyCode::Char('u')
                             if key
                                 .modifiers
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
-                            // Ctrl+u: Scroll up in focused section
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
                             drop(state_read);
@@ -183,28 +236,24 @@ impl EventHandler {
                                     DetailTab::Headers => {
                                         s.headers_scroll = s.headers_scroll.saturating_sub(5);
                                     }
-                                    DetailTab::Endpoint => {
+                                    DetailTab::Endpoint | DetailTab::Request => {
                                         // Endpoint tab doesn't scroll
                                     }
                                 }
                             }
                         }
-
+                        // Ctrl+d: Scroll down in focused section
                         KeyCode::Char('d')
                             if key
                                 .modifiers
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
-                            // Ctrl+d: Scroll down in focused section
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
                             drop(state_read);
 
-                            use crate::types::PanelFocus;
-
                             if panel == PanelFocus::Details {
                                 let mut s = state.write().unwrap();
-                                use crate::types::DetailTab;
 
                                 match s.active_detail_tab {
                                     DetailTab::Response => {
@@ -214,82 +263,193 @@ impl EventHandler {
                                     DetailTab::Headers => {
                                         s.headers_scroll = s.headers_scroll.saturating_add(5);
                                     }
-                                    DetailTab::Endpoint => {
+                                    DetailTab::Endpoint | DetailTab::Request => {
                                         // Endpoint tab doesn't scroll
                                     }
                                 }
                             }
                         }
 
-                        KeyCode::Char(',') => {
-                            self.handle_url_dialog(
-                                state.clone(),
-                                swagger_url.clone(),
-                                base_url.clone(),
-                            );
-                        }
+                        // Special keys --
+                        // tab navigation
+                        KeyCode::Tab => {
+                            let mut s = state.write().unwrap();
+                            use crate::types::{DetailTab, PanelFocus};
 
+                            match s.panel_focus {
+                                PanelFocus::EndpointsList => {
+                                    // Move from Endpoints panel to Details panel (Endpoint tab)
+                                    s.panel_focus = PanelFocus::Details;
+                                    s.active_detail_tab = DetailTab::Endpoint;
+                                }
+                                PanelFocus::Details => {
+                                    // Cycle through tabs in Details panel
+                                    s.active_detail_tab = match s.active_detail_tab {
+                                        DetailTab::Endpoint => DetailTab::Request,
+                                        DetailTab::Request => DetailTab::Headers,
+                                        DetailTab::Headers => DetailTab::Response,
+                                        DetailTab::Response => {
+                                            // Wrap back to Endpoints panel
+                                            s.panel_focus = PanelFocus::EndpointsList;
+                                            DetailTab::Endpoint // Reset to first tab for next time
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        // Shift+Tab (BackTab) - move left
+                        KeyCode::BackTab => {
+                            let mut s = state.write().unwrap();
+                            use crate::types::{DetailTab, PanelFocus};
+
+                            match s.panel_focus {
+                                PanelFocus::EndpointsList => {
+                                    // Move from Endpoints panel to Details panel (Response tab - rightmost)
+                                    s.panel_focus = PanelFocus::Details;
+                                    s.active_detail_tab = DetailTab::Response;
+                                }
+                                PanelFocus::Details => {
+                                    // Cycle backwards through tabs in Details panel
+                                    s.active_detail_tab = match s.active_detail_tab {
+                                        DetailTab::Request => DetailTab::Endpoint,
+                                        DetailTab::Response => DetailTab::Headers,
+                                        DetailTab::Headers => DetailTab::Request,
+                                        DetailTab::Endpoint => {
+                                            // Wrap back to Endpoints panel
+                                            s.panel_focus = PanelFocus::EndpointsList;
+                                            DetailTab::Response // Reset for next time
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        // space  - execute & expand
                         KeyCode::Char(' ') => {
                             let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             let panel = state_read.panel_focus.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat space as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push(' ');
+                            } else {
+                                match panel {
+                                    PanelFocus::EndpointsList => {
+                                        // Space executes request or expands group
+                                        self.handle_enter(
+                                            state.clone(),
+                                            list_state,
+                                            base_url.clone(),
+                                        );
+                                    }
+                                    PanelFocus::Details => {
+                                        // Space in Details panel: Execute current endpoint again
+                                        let state_read = state.read().unwrap();
+                                        let view_mode = state_read.view_mode.clone();
+
+                                        let selected_endpoint = match view_mode {
+                                            ViewMode::Flat => state_read
+                                                .endpoints
+                                                .get(self.selected_index)
+                                                .cloned(),
+                                            ViewMode::Grouped => state_read
+                                                .render_items
+                                                .get(self.selected_index)
+                                                .and_then(|item| match item {
+                                                    RenderItem::Endpoint { endpoint } => {
+                                                        Some(endpoint.clone())
+                                                    }
+                                                    RenderItem::GroupHeader { .. } => None,
+                                                }),
+                                        };
+
+                                        if let Some(endpoint) = selected_endpoint {
+                                            if let Some(base_url) = base_url.clone() {
+                                                // Check if already executing
+                                                if let Some(ref executing) =
+                                                    state_read.executing_endpoint
+                                                {
+                                                    if executing == &endpoint.path {
+                                                        log_debug("Request already in progress");
+                                                        return Ok((false, None));
+                                                    }
+                                                }
+
+                                                drop(state_read);
+                                                execute_request_background(
+                                                    state.clone(),
+                                                    endpoint,
+                                                    base_url,
+                                                );
+                                            } else {
+                                                log_debug(
+                                                    "Cannot execute: Base URL not configured",
+                                                );
+                                            }
+                                        } else {
+                                            log_debug(
+                                                "No endpoint selected (group header or empty)",
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // enter - param confirm
+                        KeyCode::Enter => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
 
-                            match panel {
-                                PanelFocus::EndpointsList => {
-                                    // Space executes request or expands group
-                                    self.handle_enter(state.clone(), list_state, base_url.clone());
-                                }
-                                PanelFocus::Details => {
-                                    // Space in Details panel: Execute current endpoint again
-                                    let state_read = state.read().unwrap();
-                                    let view_mode = state_read.view_mode.clone();
+                            // ONLY handle if on Request tab and in Editing mode
+                            if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && matches!(edit_mode, RequestEditMode::Editing(_))
+                            {
+                                self.handle_request_param_confirm(state.clone());
+                            }
+                        }
+                        // backspace - param edit
+                        KeyCode::Backspace => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
 
-                                    let selected_endpoint = match view_mode {
-                                        ViewMode::Flat => {
-                                            state_read.endpoints.get(self.selected_index).cloned()
-                                        }
-                                        ViewMode::Grouped => state_read
-                                            .render_items
-                                            .get(self.selected_index)
-                                            .and_then(|item| match item {
-                                                RenderItem::Endpoint { endpoint } => {
-                                                    Some(endpoint.clone())
-                                                }
-                                                RenderItem::GroupHeader { .. } => None,
-                                            }),
-                                    };
+                            use crate::types::PanelFocus;
 
-                                    if let Some(endpoint) = selected_endpoint {
-                                        if let Some(base_url) = base_url.clone() {
-                                            // Check if already executing
-                                            if let Some(ref executing) =
-                                                state_read.executing_endpoint
-                                            {
-                                                if executing == &endpoint.path {
-                                                    log_debug("Request already in progress");
-                                                    return Ok((false, None));
-                                                }
-                                            }
+                            // ONLY handle if on Request tab and in Editing mode
+                            if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && matches!(edit_mode, RequestEditMode::Editing(_))
+                            {
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.pop();
+                            }
+                        }
+                        // esc - cancel param edit
+                        KeyCode::Esc => {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
 
-                                            drop(state_read);
-                                            log_debug(&format!(
-                                                "Re-executing: {} {}",
-                                                endpoint.method, endpoint.path
-                                            ));
-                                            crate::request::execute_request_background(
-                                                state.clone(),
-                                                endpoint,
-                                                base_url,
-                                            );
-                                        } else {
-                                            log_debug("Cannot execute: Base URL not configured");
-                                        }
-                                    } else {
-                                        log_debug("No endpoint selected (group header or empty)");
-                                    }
-                                }
+                            use crate::types::PanelFocus;
+
+                            // ONLY handle if on Request tab and in Editing mode
+                            if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && matches!(edit_mode, RequestEditMode::Editing(_))
+                            {
+                                self.handle_request_param_cancel(state.clone());
                             }
                         }
 
@@ -302,7 +462,7 @@ impl EventHandler {
 
                             use crate::types::PanelFocus;
                             if panel == PanelFocus::EndpointsList {
-                                self.handle_up(list_state);
+                                self.handle_up(state.clone(), list_state);
                             }
                         }
 
@@ -318,8 +478,30 @@ impl EventHandler {
                             }
                         }
 
-                        KeyCode::F(5) => {
-                            should_fetch = true;
+                        KeyCode::Char(c)
+                            if !key.modifiers.contains(KeyModifiers::CONTROL) && c != ' ' =>
+                        {
+                            let state_read = state.read().unwrap();
+                            let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            use crate::types::PanelFocus;
+
+                            if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && matches!(edit_mode, RequestEditMode::Editing(_))
+                            {
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push(c);
+                                log_debug(&format!(
+                                    "Added char, buffer now: {}",
+                                    s.param_edit_buffer
+                                ));
+                            } else {
+                                log_debug("Conditions not met for character input");
+                            }
                         }
 
                         _ => {}
@@ -553,7 +735,6 @@ impl EventHandler {
                 } else {
                     log_debug("Empty token, not saving");
                 }
-
                 s.input_mode = InputMode::Normal;
                 s.token_input.clear();
             }
@@ -664,18 +845,6 @@ impl EventHandler {
         log_debug("Entering token input mode");
     }
 
-    fn handle_clear_token_request(&self, state: Arc<RwLock<AppState>>) {
-        let s = state.read().unwrap();
-
-        // Only show confirmation if token exists
-        if s.auth.is_authenticated() {
-            drop(s);
-            let mut s = state.write().unwrap();
-            s.input_mode = InputMode::ConfirmClearToken;
-            log_debug("Requesting token clear confirmation");
-        }
-    }
-
     fn handle_retry(&self, state: Arc<RwLock<AppState>>) -> bool {
         let state_read = state.read().unwrap();
         if matches!(
@@ -710,25 +879,27 @@ impl EventHandler {
         log_debug(&format!("Switched to {:?} mode", state.view_mode));
     }
 
-    fn handle_up(&mut self, list_state: &mut ListState) {
+    fn handle_up(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             list_state.select(Some(self.selected_index));
+            self.ensure_request_config_for_selected(state);
         }
     }
 
     fn handle_down(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
-        let state = state.read().unwrap();
+        let state_guard = state.read().unwrap();
 
-        // Use render_items length in grouped mode, endpoints length in flat mode
-        let max_index = match state.view_mode {
-            ViewMode::Flat => state.endpoints.len().saturating_sub(1),
-            ViewMode::Grouped => state.render_items.len().saturating_sub(1),
+        let max_index = match state_guard.view_mode {
+            ViewMode::Flat => state_guard.endpoints.len().saturating_sub(1),
+            ViewMode::Grouped => state_guard.render_items.len().saturating_sub(1),
         };
+        drop(state_guard);
 
         if self.selected_index < max_index {
             self.selected_index += 1;
             list_state.select(Some(self.selected_index));
+            self.ensure_request_config_for_selected(state);
         }
     }
 
@@ -759,7 +930,7 @@ impl EventHandler {
                     drop(state_read); // Release lock before spawning task
 
                     log_debug(&format!("Executing: {} {}", endpoint.method, endpoint.path));
-                    crate::request::execute_request_background(state.clone(), endpoint, base_url);
+                    execute_request_background(state.clone(), endpoint, base_url);
                 } else {
                     log_debug("Cannot execute: Base URL not configured");
                     // TODO: Show error to user
@@ -817,6 +988,213 @@ impl EventHandler {
                     }
                 }
             }
+        }
+    }
+
+    fn handle_request_param_up(&mut self, state: Arc<RwLock<AppState>>) {
+        let mut s = state.write().unwrap();
+
+        // Only navigate if in Viewing mode
+        if matches!(s.request_edit_mode, RequestEditMode::Viewing) {
+            if s.selected_param_index > 0 {
+                s.selected_param_index -= 1;
+            }
+        }
+    }
+
+    fn handle_request_param_down(&mut self, state: Arc<RwLock<AppState>>) {
+        let state_read = state.read().unwrap();
+
+        // Only navigate if in Viewing mode
+        if !matches!(state_read.request_edit_mode, RequestEditMode::Viewing) {
+            return;
+        }
+
+        // Get currently selected endpoint to count params
+        let selected_endpoint = match state_read.view_mode {
+            ViewMode::Flat => state_read.endpoints.get(self.selected_index),
+            ViewMode::Grouped => {
+                state_read
+                    .render_items
+                    .get(self.selected_index)
+                    .and_then(|item| match item {
+                        RenderItem::Endpoint { endpoint } => Some(endpoint),
+                        RenderItem::GroupHeader { .. } => None,
+                    })
+            }
+        };
+
+        if let Some(endpoint) = selected_endpoint {
+            let query_param_count = endpoint
+                .parameters
+                .iter()
+                .filter(|p| p.location == "query")
+                .count();
+
+            drop(state_read);
+            let mut s = state.write().unwrap();
+
+            if s.selected_param_index < query_param_count.saturating_sub(1) {
+                s.selected_param_index += 1;
+            }
+        }
+    }
+
+    fn handle_request_param_edit(&mut self, state: Arc<RwLock<AppState>>) {
+        // First, gather all the data we need while holding read lock
+        let edit_data = {
+            let state_read = state.read().unwrap();
+
+            // Only enter edit mode if currently in Viewing mode
+            if !matches!(state_read.request_edit_mode, RequestEditMode::Viewing) {
+                return;
+            }
+
+            // Get currently selected endpoint
+            let selected_endpoint = match state_read.view_mode {
+                ViewMode::Flat => state_read.endpoints.get(self.selected_index),
+                ViewMode::Grouped => {
+                    state_read
+                        .render_items
+                        .get(self.selected_index)
+                        .and_then(|item| match item {
+                            RenderItem::Endpoint { endpoint } => Some(endpoint),
+                            RenderItem::GroupHeader { .. } => None,
+                        })
+                }
+            };
+
+            if let Some(endpoint) = selected_endpoint {
+                // Get the selected parameter
+                let query_params: Vec<_> = endpoint
+                    .parameters
+                    .iter()
+                    .filter(|p| p.location == "query")
+                    .collect();
+
+                if let Some(param) = query_params.get(state_read.selected_param_index) {
+                    // Collect the data we need: param name, endpoint path, current value
+                    let param_name = param.name.clone();
+                    let endpoint_path = endpoint.path.clone();
+
+                    // Get current value from config if it exists
+                    let current_value = state_read
+                        .request_configs
+                        .get(&endpoint_path)
+                        .and_then(|config| config.query_params.get(&param_name))
+                        .cloned()
+                        .unwrap_or_default();
+
+                    Some((param_name, endpoint_path, current_value))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }; // state_read is dropped here
+
+        // Now we can safely acquire write lock with the data we collected
+        if let Some((param_name, endpoint_path, current_value)) = edit_data {
+            let mut s = state.write().unwrap();
+
+            // Ensure config exists
+            s.request_configs
+                .entry(endpoint_path)
+                .or_insert_with(RequestConfig::default);
+
+            // Enter edit mode
+            s.request_edit_mode = RequestEditMode::Editing(param_name.clone());
+            s.param_edit_buffer = current_value;
+
+            log_debug(&format!("Editing parameter: {}", param_name));
+        }
+    }
+
+    fn handle_request_param_confirm(&mut self, state: Arc<RwLock<AppState>>) {
+        let state_read = state.read().unwrap();
+
+        // Get the param name we're editing
+        if let RequestEditMode::Editing(param_name) = &state_read.request_edit_mode {
+            let param_name = param_name.clone();
+            let new_value = state_read.param_edit_buffer.clone();
+
+            // Get currently selected endpoint
+            let selected_endpoint = match state_read.view_mode {
+                ViewMode::Flat => state_read.endpoints.get(self.selected_index),
+                ViewMode::Grouped => {
+                    state_read
+                        .render_items
+                        .get(self.selected_index)
+                        .and_then(|item| match item {
+                            RenderItem::Endpoint { endpoint } => Some(endpoint),
+                            RenderItem::GroupHeader { .. } => None,
+                        })
+                }
+            };
+
+            if let Some(endpoint) = selected_endpoint {
+                let endpoint_path = endpoint.path.clone();
+
+                drop(state_read);
+                let mut s = state.write().unwrap();
+
+                // Update the request config
+                let config = s
+                    .request_configs
+                    .entry(endpoint_path)
+                    .or_insert_with(RequestConfig::default);
+
+                config
+                    .query_params
+                    .insert(param_name.clone(), new_value.clone());
+
+                // Exit edit mode
+                s.request_edit_mode = RequestEditMode::Viewing;
+                s.param_edit_buffer.clear();
+
+                log_debug(&format!(
+                    "Confirmed parameter {}: {}",
+                    param_name, new_value
+                ));
+            }
+        }
+    }
+
+    fn handle_request_param_cancel(&mut self, state: Arc<RwLock<AppState>>) {
+        let mut s = state.write().unwrap();
+
+        // Just exit edit mode without saving
+        s.request_edit_mode = RequestEditMode::Viewing;
+        s.param_edit_buffer.clear();
+
+        log_debug("Cancelled parameter edit");
+    }
+
+    // Add this to EventHandler impl in events.rs
+    fn ensure_request_config_for_selected(&self, state: Arc<RwLock<AppState>>) {
+        let state_read = state.read().unwrap();
+
+        // Get currently selected endpoint
+        let selected_endpoint = match state_read.view_mode {
+            ViewMode::Flat => state_read.endpoints.get(self.selected_index),
+            ViewMode::Grouped => {
+                state_read
+                    .render_items
+                    .get(self.selected_index)
+                    .and_then(|item| match item {
+                        RenderItem::Endpoint { endpoint } => Some(endpoint),
+                        RenderItem::GroupHeader { .. } => None,
+                    })
+            }
+        };
+
+        if let Some(endpoint) = selected_endpoint {
+            let endpoint = endpoint.clone();
+            drop(state_read);
+
+            let mut s = state.write().unwrap();
+            s.get_or_create_request_config(&endpoint);
         }
     }
 }

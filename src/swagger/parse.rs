@@ -10,6 +10,7 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 path: path.clone(),
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
+                parameters: op.parameters.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.post {
@@ -18,6 +19,7 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 path: path.clone(),
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
+                parameters: op.parameters.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.put {
@@ -26,6 +28,7 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 path: path.clone(),
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
+                parameters: op.parameters.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.delete {
@@ -34,6 +37,7 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 path: path.clone(),
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
+                parameters: op.parameters.clone().unwrap_or_default(),
             });
         }
         if let Some(op) = &path_item.patch {
@@ -42,6 +46,7 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 path: path.clone(),
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
+                parameters: op.parameters.clone().unwrap_or_default(),
             });
         }
     }
