@@ -441,21 +441,79 @@ fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint) {
 fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
 
-    // Get query parameters for this endpoint
-    let query_params: Vec<&Parameter> = endpoint
-        .parameters
-        .iter()
-        .filter(|p| p.location == "query")
-        .collect();
+    // Get path and query parameters for this endpoint
+    let path_params: Vec<&Parameter> = endpoint.path_params();
+    let query_params: Vec<&Parameter> = endpoint.query_params();
 
-    if query_params.is_empty() {
-        // No query parameters
+    // Check if there are ANY parameters at all
+    if path_params.is_empty() && query_params.is_empty() {
         lines.push(Line::from(Span::styled(
-            "No query parameters defined for this endpoint",
+            "No parameters defined for this endpoint",
             Style::default().fg(Color::DarkGray),
         )));
-    } else {
-        // Title
+
+        let content = Paragraph::new(lines).wrap(Wrap { trim: false });
+        frame.render_widget(content, area);
+        return;
+    }
+
+    // Get request config for this endpoint
+    let config = state.request_configs.get(&endpoint.path);
+
+    let total_path_params = path_params.len();
+
+    // ===== SECTION 1: Path Parameters =====
+    if !path_params.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "Path Parameters:",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from("")); // Empty line
+
+        // Display each path parameter
+        for (idx, param) in path_params.iter().enumerate() {
+            let global_idx = idx; // Path params come first
+            let is_selected = state.selected_param_index == global_idx;
+
+            let current_value =
+                if let RequestEditMode::Editing(editing_param_name) = &state.request_edit_mode {
+                    if editing_param_name == &param.name {
+                        state.param_edit_buffer.as_str()
+                    } else {
+                        config
+                            .and_then(|c| c.path_params.get(&param.name))
+                            .map(|s| s.as_str())
+                            .unwrap_or("")
+                    }
+                } else {
+                    config
+                        .and_then(|c| c.path_params.get(&param.name))
+                        .map(|s| s.as_str())
+                        .unwrap_or("")
+                };
+
+            let is_editing = matches!(
+                &state.request_edit_mode,
+                RequestEditMode::Editing(name) if name == &param.name
+            );
+
+            let line = build_param_line(
+                param,
+                current_value,
+                is_selected,
+                is_editing,
+                true, // is_path_param
+            );
+            lines.push(line);
+        }
+
+        lines.push(Line::from("")); // Empty line after path params
+    }
+
+    // ===== SECTION 2: Query Parameters =====
+    if !query_params.is_empty() {
         lines.push(Line::from(Span::styled(
             "Query Parameters:",
             Style::default()
@@ -464,12 +522,10 @@ fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, sta
         )));
         lines.push(Line::from("")); // Empty line
 
-        // Get request config for this endpoint
-        let config = state.request_configs.get(&endpoint.path);
-
-        // Display each parameter
+        // Display each query parameter
         for (idx, param) in query_params.iter().enumerate() {
-            // ... existing parameter rendering code ...
+            let global_idx = total_path_params + idx; // Offset by path param count
+            let is_selected = state.selected_param_index == global_idx;
 
             let current_value =
                 if let RequestEditMode::Editing(editing_param_name) = &state.request_edit_mode {
@@ -488,57 +544,82 @@ fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, sta
                         .unwrap_or("")
                 };
 
-            let is_selected = state.selected_param_index == idx;
             let is_editing = matches!(
                 &state.request_edit_mode,
                 RequestEditMode::Editing(name) if name == &param.name
             );
 
-            let line = build_param_line(param, current_value, is_selected, is_editing);
+            let line = build_param_line(
+                param,
+                current_value,
+                is_selected,
+                is_editing,
+                false, // is_path_param
+            );
             lines.push(line);
         }
 
-        // ADD URL PREVIEW SECTION
-        lines.push(Line::from("")); // Empty line
-        lines.push(Line::from(Span::styled(
-            "Preview URL:",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )));
-
-        // Build preview URL
-        let preview_url = if let Some(config) = config {
-            build_preview_url(&endpoint.path, &config.query_params)
-        } else {
-            endpoint.path.clone()
-        };
-
-        lines.push(Line::from(Span::styled(
-            preview_url,
-            Style::default().fg(Color::Yellow),
-        )));
-
-        // Add help text at bottom
-        lines.push(Line::from("")); // Empty line
-
-        let help_text = match &state.request_edit_mode {
-            RequestEditMode::Viewing => "j/k: Navigate  |  e: Edit parameter  |  Space: Execute",
-            RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
-        };
-
-        lines.push(Line::from(Span::styled(
-            help_text,
-            Style::default().fg(Color::DarkGray),
-        )));
+        lines.push(Line::from("")); // Empty line after query params
     }
+
+    // ===== SECTION 3: URL Preview =====
+    lines.push(Line::from(Span::styled(
+        "Preview URL:",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    // Build preview URL with both path and query params
+    let preview_url = if let Some(config) = config {
+        build_preview_url(&endpoint.path, &config.path_params, &config.query_params)
+    } else {
+        endpoint.path.clone()
+    };
+
+    lines.push(Line::from(Span::styled(
+        preview_url,
+        Style::default().fg(Color::Yellow),
+    )));
+
+    // ===== SECTION 4: Help Text =====
+    lines.push(Line::from("")); // Empty line
+
+    let help_text = match &state.request_edit_mode {
+        RequestEditMode::Viewing => "j/k: Navigate  |  e: Edit parameter  |  Space: Execute",
+        RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
+    };
+
+    lines.push(Line::from(Span::styled(
+        help_text,
+        Style::default().fg(Color::DarkGray),
+    )));
 
     let content = Paragraph::new(lines).wrap(Wrap { trim: false });
     frame.render_widget(content, area);
 }
 
-// Add this helper function at the end of draw.rs
-fn build_preview_url(path: &str, query_params: &HashMap<String, String>) -> String {
+fn build_preview_url(
+    path_template: &str,
+    path_params: &HashMap<String, String>,
+    query_params: &HashMap<String, String>,
+) -> String {
+    // Step 1: Substitute path parameters
+    let mut path = path_template.to_string();
+
+    for (key, value) in path_params {
+        let placeholder = format!("{{{}}}", key);
+        if path.contains(&placeholder) {
+            // Show placeholder if value is empty, otherwise substitute
+            if value.is_empty() {
+                // Keep the placeholder visible
+            } else {
+                path = path.replace(&placeholder, value);
+            }
+        }
+    }
+
+    // Step 2: Add query parameters
     let non_empty_params: Vec<String> = query_params
         .iter()
         .filter(|(_, v)| !v.is_empty())
@@ -546,7 +627,7 @@ fn build_preview_url(path: &str, query_params: &HashMap<String, String>) -> Stri
         .collect();
 
     if non_empty_params.is_empty() {
-        path.to_string()
+        path
     } else {
         format!("{}?{}", path, non_empty_params.join("&"))
     }
@@ -558,6 +639,7 @@ fn build_param_line(
     current_value: &str,
     is_selected: bool,
     is_editing: bool,
+    is_path_param: bool,
 ) -> Line<'static> {
     // Build type info string (e.g., "integer/int32" or "boolean")
     let type_info = if let Some(schema) = &param.schema {
@@ -599,10 +681,18 @@ fn build_param_line(
 
     let name_style = if is_selected {
         Style::default()
-            .fg(Color::Cyan)
+            .fg(if is_path_param {
+                Color::Magenta
+            } else {
+                Color::Cyan
+            })
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(if is_path_param {
+            Color::Rgb(180, 100, 180) // Dimmed magenta
+        } else {
+            Color::White
+        })
     };
 
     let value_style = if is_editing {

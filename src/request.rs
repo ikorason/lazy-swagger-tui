@@ -20,34 +20,35 @@ pub fn execute_request_background(
 
     // Spawn background task
     tokio::spawn(async move {
-        // Get query parameters from request config
-        let query_params = {
+        // Get path and query parameters from request config
+        let (path_params, query_params) = {
             let s = state.read().unwrap();
             s.request_configs
                 .get(&endpoint.path)
-                .map(|config| config.query_params.clone())
+                .map(|config| (config.path_params.clone(), config.query_params.clone()))
                 .unwrap_or_default()
         };
 
         // Build the full URL with query parameters
-        let full_url = match build_url_with_params(&base_url, &endpoint.path, &query_params) {
-            Ok(url) => url,
-            Err(e) => {
-                // Handle URL building error
-                let mut s = state.write().unwrap();
-                s.executing_endpoint = None;
-                s.current_response = Some(ApiResponse {
-                    status: 0,
-                    status_text: String::new(),
-                    headers: HashMap::new(),
-                    body: String::new(),
-                    duration: std::time::Duration::from_secs(0),
-                    is_error: true,
-                    error_message: Some(format!("Failed to build URL: {}", e)),
-                });
-                return;
-            }
-        };
+        let full_url =
+            match build_url_with_params(&base_url, &endpoint.path, &path_params, &query_params) {
+                Ok(url) => url,
+                Err(e) => {
+                    // Handle URL building error
+                    let mut s = state.write().unwrap();
+                    s.executing_endpoint = None;
+                    s.current_response = Some(ApiResponse {
+                        status: 0,
+                        status_text: String::new(),
+                        headers: HashMap::new(),
+                        body: String::new(),
+                        duration: std::time::Duration::from_secs(0),
+                        is_error: true,
+                        error_message: Some(format!("Failed to build URL: {}", e)),
+                    });
+                    return;
+                }
+            };
 
         // Build and execute request
         let response = execute_get_request(&full_url, &state).await;
@@ -147,19 +148,30 @@ async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiRes
     }
 }
 
-/// Build a full URL with query parameters
+/// Build a full URL with path and query parameters
 fn build_url_with_params(
     base_url: &str,
-    path: &str,
+    path_template: &str,
+    path_params: &HashMap<String, String>,
     query_params: &HashMap<String, String>,
 ) -> Result<String, String> {
-    // Start with base URL + path
+    // Step 1: Substitute path parameters
+    let mut path = path_template.to_string();
+
+    for (key, value) in path_params {
+        let placeholder = format!("{{{}}}", key);
+        if path.contains(&placeholder) {
+            path = path.replace(&placeholder, value);
+        }
+    }
+
+    // Step 2: Build full URL with base
     let full_path = format!("{}{}", base_url.trim_end_matches('/'), path);
 
-    // Parse as URL
+    // Step 3: Parse as URL
     let mut url = Url::parse(&full_path).map_err(|e| format!("Invalid URL: {}", e))?;
 
-    // Add query parameters (only non-empty ones)
+    // Step 4: Add query parameters (only non-empty ones)
     for (key, value) in query_params {
         if !value.is_empty() {
             url.query_pairs_mut().append_pair(key, value);

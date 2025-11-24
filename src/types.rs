@@ -11,6 +11,52 @@ pub struct ApiEndpoint {
     pub parameters: Vec<Parameter>,
 }
 
+impl ApiEndpoint {
+    /// Get all path parameters for this endpoint
+    pub fn path_params(&self) -> Vec<&Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.location == "path")
+            .collect()
+    }
+
+    /// Get all query parameters for this endpoint
+    pub fn query_params(&self) -> Vec<&Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.location == "query")
+            .collect()
+    }
+
+    /// Check if all required path parameters have values in the given config
+    pub fn has_all_required_path_params(&self, config: &RequestConfig) -> bool {
+        self.path_params().iter().all(|param| {
+            // Path params are typically always required
+            // Check if we have a non-empty value for this param
+            config
+                .path_params
+                .get(&param.name)
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
+        })
+    }
+
+    /// Get list of missing path parameter names
+    pub fn missing_path_params(&self, config: &RequestConfig) -> Vec<String> {
+        self.path_params()
+            .iter()
+            .filter(|param| {
+                config
+                    .path_params
+                    .get(&param.name)
+                    .map(|v| v.is_empty())
+                    .unwrap_or(true)
+            })
+            .map(|param| param.name.clone())
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Parameter {
     pub name: String,
@@ -22,6 +68,7 @@ pub struct Parameter {
 
     pub schema: Option<ParameterSchema>,
 
+    #[allow(dead_code)]
     pub description: Option<String>,
 }
 
@@ -38,8 +85,8 @@ pub struct ParameterSchema {
 #[derive(Debug, Clone, Default)]
 pub struct RequestConfig {
     pub query_params: HashMap<String, String>,
+    pub path_params: HashMap<String, String>,
     // Future additions:
-    // pub path_params: HashMap<String, String>,
     // pub body: Option<String>,
     // pub headers: HashMap<String, String>,
 }
@@ -122,6 +169,7 @@ pub enum RenderItem {
 pub enum InputMode {
     Normal,
     EnteringToken,
+    #[allow(dead_code)]
     ConfirmClearToken,
     EnteringUrl,
 }

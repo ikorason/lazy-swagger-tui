@@ -2,8 +2,8 @@ use crate::config;
 use crate::request::execute_request_background;
 use crate::state::{AppState, count_visible_items};
 use crate::types::{
-    DetailTab, InputMode, PanelFocus, RenderItem, RequestConfig, RequestEditMode, UrlInputField,
-    UrlSubmission, ViewMode,
+    ApiEndpoint, ApiResponse, DetailTab, InputMode, PanelFocus, RenderItem, RequestConfig,
+    RequestEditMode, UrlInputField, UrlSubmission, ViewMode,
 };
 
 use color_eyre::Result;
@@ -79,8 +79,6 @@ impl EventHandler {
                             let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
-                            use crate::types::PanelFocus;
-
                             // If editing a parameter, treat as character input
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 let mut s = state.write().unwrap();
@@ -109,8 +107,6 @@ impl EventHandler {
                             let active_tab = state_read.active_detail_tab.clone();
                             let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
-
-                            use crate::types::PanelFocus;
 
                             // If editing a parameter, treat as character input
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
@@ -281,11 +277,15 @@ impl EventHandler {
                                     // Move from Endpoints panel to Details panel (Endpoint tab)
                                     s.panel_focus = PanelFocus::Details;
                                     s.active_detail_tab = DetailTab::Endpoint;
+                                    s.selected_param_index = 0; // Reset to first param
                                 }
                                 PanelFocus::Details => {
                                     // Cycle through tabs in Details panel
                                     s.active_detail_tab = match s.active_detail_tab {
-                                        DetailTab::Endpoint => DetailTab::Request,
+                                        DetailTab::Endpoint => {
+                                            s.selected_param_index = 0; // Reset when entering Request tab
+                                            DetailTab::Request
+                                        }
                                         DetailTab::Request => DetailTab::Headers,
                                         DetailTab::Headers => DetailTab::Response,
                                         DetailTab::Response => {
@@ -310,16 +310,24 @@ impl EventHandler {
                                 }
                                 PanelFocus::Details => {
                                     // Cycle backwards through tabs in Details panel
-                                    s.active_detail_tab = match s.active_detail_tab {
-                                        DetailTab::Request => DetailTab::Endpoint,
-                                        DetailTab::Response => DetailTab::Headers,
-                                        DetailTab::Headers => DetailTab::Request,
+                                    match s.active_detail_tab {
+                                        DetailTab::Request => {
+                                            s.selected_param_index = 0; // Reset when leaving Request tab
+                                            s.active_detail_tab = DetailTab::Endpoint;
+                                        }
+                                        DetailTab::Response => {
+                                            s.active_detail_tab = DetailTab::Headers;
+                                        }
+                                        DetailTab::Headers => {
+                                            s.selected_param_index = 0; // Reset when entering Request tab
+                                            s.active_detail_tab = DetailTab::Request;
+                                        }
                                         DetailTab::Endpoint => {
                                             // Wrap back to Endpoints panel
                                             s.panel_focus = PanelFocus::EndpointsList;
-                                            DetailTab::Response // Reset for next time
+                                            // Keep active_detail_tab as Endpoint - don't change it
                                         }
-                                    };
+                                    }
                                 }
                             }
                         }
@@ -375,6 +383,32 @@ impl EventHandler {
                                                         log_debug("Request already in progress");
                                                         return Ok((false, None));
                                                     }
+                                                }
+
+                                                // Validate that all required path params are filled
+                                                let config =
+                                                    state_read.request_configs.get(&endpoint.path);
+                                                if let Err(err_msg) =
+                                                    can_execute_endpoint(&endpoint, config)
+                                                {
+                                                    log_debug(&format!(
+                                                        "Cannot execute: {}",
+                                                        err_msg
+                                                    ));
+                                                    drop(state_read);
+
+                                                    // Store error in response so user can see it
+                                                    let mut s = state.write().unwrap();
+                                                    s.current_response = Some(ApiResponse {
+                                                        status: 0,
+                                                        status_text: String::new(),
+                                                        headers: std::collections::HashMap::new(),
+                                                        body: String::new(),
+                                                        duration: std::time::Duration::from_secs(0),
+                                                        is_error: true,
+                                                        error_message: Some(err_msg),
+                                                    });
+                                                    return Ok((false, None));
                                                 }
 
                                                 drop(state_read);
@@ -883,6 +917,12 @@ impl EventHandler {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             list_state.select(Some(self.selected_index));
+
+            // Reset parameter selection when changing endpoints
+            let mut s = state.write().unwrap();
+            s.selected_param_index = 0;
+            drop(s);
+
             self.ensure_request_config_for_selected(state);
         }
     }
@@ -899,6 +939,12 @@ impl EventHandler {
         if self.selected_index < max_index {
             self.selected_index += 1;
             list_state.select(Some(self.selected_index));
+
+            // Reset parameter selection when changing endpoints
+            let mut s = state.write().unwrap();
+            s.selected_param_index = 0;
+            drop(s);
+
             self.ensure_request_config_for_selected(state);
         }
     }
@@ -927,13 +973,32 @@ impl EventHandler {
                         }
                     }
 
+                    // Validate that all required path params are filled
+                    let config = state_read.request_configs.get(&endpoint.path);
+                    if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
+                        log_debug(&format!("Cannot execute: {}", err_msg));
+                        drop(state_read);
+
+                        // Store error in response so user can see it
+                        let mut s = state.write().unwrap();
+                        s.current_response = Some(crate::types::ApiResponse {
+                            status: 0,
+                            status_text: String::new(),
+                            headers: std::collections::HashMap::new(),
+                            body: String::new(),
+                            duration: std::time::Duration::from_secs(0),
+                            is_error: true,
+                            error_message: Some(err_msg),
+                        });
+                        return;
+                    }
+
                     drop(state_read); // Release lock before spawning task
 
                     log_debug(&format!("Executing: {} {}", endpoint.method, endpoint.path));
                     execute_request_background(state.clone(), endpoint, base_url);
                 } else {
                     log_debug("Cannot execute: Base URL not configured");
-                    // TODO: Show error to user
                 }
             }
         } else {
@@ -973,6 +1038,26 @@ impl EventHandler {
                                 }
                             }
 
+                            // Validate that all required path params are filled
+                            let config = state_read.request_configs.get(&endpoint.path);
+                            if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
+                                log_debug(&format!("Cannot execute: {}", err_msg));
+                                drop(state_read);
+
+                                // Store error in response so user can see it
+                                let mut s = state.write().unwrap();
+                                s.current_response = Some(crate::types::ApiResponse {
+                                    status: 0,
+                                    status_text: String::new(),
+                                    headers: std::collections::HashMap::new(),
+                                    body: String::new(),
+                                    duration: std::time::Duration::from_secs(0),
+                                    is_error: true,
+                                    error_message: Some(err_msg),
+                                });
+                                return;
+                            }
+
                             drop(state_read);
 
                             log_debug(&format!("Executing: {} {}", endpoint.method, endpoint.path));
@@ -983,7 +1068,6 @@ impl EventHandler {
                             );
                         } else {
                             log_debug("Cannot execute: Base URL not configured");
-                            // TODO: Show error to user
                         }
                     }
                 }
@@ -1025,16 +1109,14 @@ impl EventHandler {
         };
 
         if let Some(endpoint) = selected_endpoint {
-            let query_param_count = endpoint
-                .parameters
-                .iter()
-                .filter(|p| p.location == "query")
-                .count();
+            let path_param_count = endpoint.path_params().len();
+            let query_param_count = endpoint.query_params().len();
+            let total_param_count = path_param_count + query_param_count;
 
             drop(state_read);
             let mut s = state.write().unwrap();
 
-            if s.selected_param_index < query_param_count.saturating_sub(1) {
+            if s.selected_param_index < total_param_count.saturating_sub(1) {
                 s.selected_param_index += 1;
             }
         }
@@ -1065,23 +1147,39 @@ impl EventHandler {
             };
 
             if let Some(endpoint) = selected_endpoint {
-                // Get the selected parameter
-                let query_params: Vec<_> = endpoint
-                    .parameters
-                    .iter()
-                    .filter(|p| p.location == "query")
-                    .collect();
+                // Get both path and query parameters
+                let path_params: Vec<_> = endpoint.path_params();
+                let query_params: Vec<_> = endpoint.query_params();
 
-                if let Some(param) = query_params.get(state_read.selected_param_index) {
-                    // Collect the data we need: param name, endpoint path, current value
+                let path_param_count = path_params.len();
+                let selected_idx = state_read.selected_param_index;
+
+                // Determine if we're editing a path or query param
+                let param = if selected_idx < path_param_count {
+                    // We're in the path params section
+                    path_params.get(selected_idx)
+                } else {
+                    // We're in the query params section
+                    let query_idx = selected_idx - path_param_count;
+                    query_params.get(query_idx)
+                };
+
+                if let Some(param) = param {
                     let param_name = param.name.clone();
+                    let param_location = param.location.clone();
                     let endpoint_path = endpoint.path.clone();
 
-                    // Get current value from config if it exists
+                    // Get current value from the appropriate HashMap
                     let current_value = state_read
                         .request_configs
                         .get(&endpoint_path)
-                        .and_then(|config| config.query_params.get(&param_name))
+                        .and_then(|config| {
+                            if param_location == "path" {
+                                config.path_params.get(&param_name)
+                            } else {
+                                config.query_params.get(&param_name)
+                            }
+                        })
                         .cloned()
                         .unwrap_or_default();
 
@@ -1136,18 +1234,33 @@ impl EventHandler {
             if let Some(endpoint) = selected_endpoint {
                 let endpoint_path = endpoint.path.clone();
 
+                // Determine which parameter we're editing by finding it in the endpoint
+                let param_location = endpoint
+                    .parameters
+                    .iter()
+                    .find(|p| p.name == param_name)
+                    .map(|p| p.location.clone());
+
                 drop(state_read);
                 let mut s = state.write().unwrap();
 
-                // Update the request config
+                // Update the request config in the correct HashMap
                 let config = s
                     .request_configs
                     .entry(endpoint_path)
                     .or_insert_with(RequestConfig::default);
 
-                config
-                    .query_params
-                    .insert(param_name.clone(), new_value.clone());
+                if let Some(location) = param_location {
+                    if location == "path" {
+                        config
+                            .path_params
+                            .insert(param_name.clone(), new_value.clone());
+                    } else if location == "query" {
+                        config
+                            .query_params
+                            .insert(param_name.clone(), new_value.clone());
+                    }
+                }
 
                 // Exit edit mode
                 s.request_edit_mode = RequestEditMode::Viewing;
@@ -1197,6 +1310,29 @@ impl EventHandler {
             s.get_or_create_request_config(&endpoint);
         }
     }
+}
+
+/// Check if endpoint can be executed (all required path params are filled)
+fn can_execute_endpoint(
+    endpoint: &ApiEndpoint,
+    config: Option<&RequestConfig>,
+) -> Result<(), String> {
+    // Check if we have a config at all
+    let config = match config {
+        Some(c) => c,
+        None => return Err("No request configuration found".to_string()),
+    };
+
+    // Check if all path params are filled
+    if !endpoint.has_all_required_path_params(config) {
+        let missing = endpoint.missing_path_params(config);
+        return Err(format!(
+            "Missing required path parameter(s): {}",
+            missing.join(", ")
+        ));
+    }
+
+    Ok(())
 }
 
 fn log_debug(msg: &str) {

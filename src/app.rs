@@ -206,12 +206,3 @@ impl App {
         }
     }
 }
-
-fn json_value_to_string(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::Bool(b) => b.to_string(),
-        _ => value.to_string(),
-    }
-}

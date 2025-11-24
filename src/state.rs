@@ -1,5 +1,5 @@
 use crate::types::{
-    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus, Parameter,
+    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
     RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
 };
 use std::collections::{HashMap, HashSet};
@@ -87,36 +87,45 @@ impl AppState {
             .or_insert_with(|| {
                 let mut config = RequestConfig::default();
 
-                // Initialize with defaults from Swagger parameters
+                // Initialize parameters from Swagger spec
                 for param in &endpoint.parameters {
-                    if param.location == "query" {
-                        if let Some(schema) = &param.schema {
-                            if let Some(default) = &schema.default {
-                                let default_str = json_value_to_string(default);
-                                config.query_params.insert(param.name.clone(), default_str);
+                    match param.location.as_str() {
+                        "path" => {
+                            // Path params: initialize with default or empty
+                            if let Some(schema) = &param.schema {
+                                if let Some(default) = &schema.default {
+                                    let default_str = json_value_to_string(default);
+                                    config.path_params.insert(param.name.clone(), default_str);
+                                }
                             }
+                            // Always insert path params (even if empty) so they show in UI
+                            config
+                                .path_params
+                                .entry(param.name.clone())
+                                .or_insert_with(String::new);
                         }
-
-                        // If no default but param exists, insert empty string
-                        // so it shows up in the UI
-                        config
-                            .query_params
-                            .entry(param.name.clone())
-                            .or_insert_with(String::new);
+                        "query" => {
+                            // Query params: initialize with default or empty
+                            if let Some(schema) = &param.schema {
+                                if let Some(default) = &schema.default {
+                                    let default_str = json_value_to_string(default);
+                                    config.query_params.insert(param.name.clone(), default_str);
+                                }
+                            }
+                            // Always insert query params (even if empty) so they show in UI
+                            config
+                                .query_params
+                                .entry(param.name.clone())
+                                .or_insert_with(String::new);
+                        }
+                        _ => {
+                            // Ignore other param types for now (header, cookie, etc.)
+                        }
                     }
                 }
 
                 config
             })
-    }
-
-    /// Get list of query parameters for an endpoint (in order)
-    pub fn get_query_params_list<'a>(&self, endpoint: &'a ApiEndpoint) -> Vec<&'a Parameter> {
-        endpoint
-            .parameters
-            .iter()
-            .filter(|p| p.location == "query")
-            .collect()
     }
 }
 
