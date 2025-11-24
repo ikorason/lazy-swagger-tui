@@ -117,6 +117,21 @@ pub struct ApiResponse {
     pub error_message: Option<String>,
 }
 
+impl ApiResponse {
+    /// Creates an error response with the given error message
+    pub fn error(error_message: String) -> Self {
+        Self {
+            status: 0,
+            status_text: String::new(),
+            headers: HashMap::new(),
+            body: String::new(),
+            duration: Duration::from_secs(0),
+            is_error: true,
+            error_message: Some(error_message),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct SwaggerSpec {
     pub paths: HashMap<String, PathItem>,

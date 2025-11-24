@@ -37,15 +37,7 @@ pub fn execute_request_background(
                     // Handle URL building error
                     let mut s = state.write().unwrap();
                     s.executing_endpoint = None;
-                    s.current_response = Some(ApiResponse {
-                        status: 0,
-                        status_text: String::new(),
-                        headers: HashMap::new(),
-                        body: String::new(),
-                        duration: std::time::Duration::from_secs(0),
-                        is_error: true,
-                        error_message: Some(format!("Failed to build URL: {}", e)),
-                    });
+                    s.current_response = Some(ApiResponse::error(format!("Failed to build URL: {}", e)));
                     return;
                 }
             };

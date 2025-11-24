@@ -80,6 +80,21 @@ impl Default for AppState {
 }
 
 impl AppState {
+    /// Get the selected endpoint based on the current view mode and selected index
+    pub fn get_selected_endpoint(&self, selected_index: usize) -> Option<&ApiEndpoint> {
+        match self.view_mode {
+            ViewMode::Flat => self.endpoints.get(selected_index),
+            ViewMode::Grouped => {
+                self.render_items
+                    .get(selected_index)
+                    .and_then(|item| match item {
+                        RenderItem::Endpoint { endpoint } => Some(endpoint),
+                        RenderItem::GroupHeader { .. } => None,
+                    })
+            }
+        }
+    }
+
     /// Get or create request config for an endpoint, initializing with Swagger defaults
     pub fn get_or_create_request_config(&mut self, endpoint: &ApiEndpoint) -> &mut RequestConfig {
         self.request_configs

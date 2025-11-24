@@ -262,16 +262,7 @@ pub fn render_details_panel(
     selected_index: usize,
 ) {
     // Get the selected endpoint
-    let selected_endpoint = match state.view_mode {
-        ViewMode::Flat => state.endpoints.get(selected_index),
-        ViewMode::Grouped => state
-            .render_items
-            .get(selected_index)
-            .and_then(|item| match item {
-                RenderItem::Endpoint { endpoint } => Some(endpoint),
-                RenderItem::GroupHeader { .. } => None,
-            }),
-    };
+    let selected_endpoint = state.get_selected_endpoint(selected_index);
 
     // Determine border color based on panel focus
     use crate::types::PanelFocus;

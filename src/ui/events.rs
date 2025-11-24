@@ -355,23 +355,8 @@ impl EventHandler {
                                     PanelFocus::Details => {
                                         // Space in Details panel: Execute current endpoint again
                                         let state_read = state.read().unwrap();
-                                        let view_mode = state_read.view_mode.clone();
 
-                                        let selected_endpoint = match view_mode {
-                                            ViewMode::Flat => state_read
-                                                .endpoints
-                                                .get(self.selected_index)
-                                                .cloned(),
-                                            ViewMode::Grouped => state_read
-                                                .render_items
-                                                .get(self.selected_index)
-                                                .and_then(|item| match item {
-                                                    RenderItem::Endpoint { endpoint } => {
-                                                        Some(endpoint.clone())
-                                                    }
-                                                    RenderItem::GroupHeader { .. } => None,
-                                                }),
-                                        };
+                                        let selected_endpoint = state_read.get_selected_endpoint(self.selected_index).cloned();
 
                                         if let Some(endpoint) = selected_endpoint {
                                             if let Some(base_url) = base_url.clone() {
@@ -399,15 +384,7 @@ impl EventHandler {
 
                                                     // Store error in response so user can see it
                                                     let mut s = state.write().unwrap();
-                                                    s.current_response = Some(ApiResponse {
-                                                        status: 0,
-                                                        status_text: String::new(),
-                                                        headers: std::collections::HashMap::new(),
-                                                        body: String::new(),
-                                                        duration: std::time::Duration::from_secs(0),
-                                                        is_error: true,
-                                                        error_message: Some(err_msg),
-                                                    });
+                                                    s.current_response = Some(ApiResponse::error(err_msg));
                                                     return Ok((false, None));
                                                 }
 
@@ -981,15 +958,7 @@ impl EventHandler {
 
                         // Store error in response so user can see it
                         let mut s = state.write().unwrap();
-                        s.current_response = Some(crate::types::ApiResponse {
-                            status: 0,
-                            status_text: String::new(),
-                            headers: std::collections::HashMap::new(),
-                            body: String::new(),
-                            duration: std::time::Duration::from_secs(0),
-                            is_error: true,
-                            error_message: Some(err_msg),
-                        });
+                        s.current_response = Some(ApiResponse::error(err_msg));
                         return;
                     }
 
@@ -1046,15 +1015,7 @@ impl EventHandler {
 
                                 // Store error in response so user can see it
                                 let mut s = state.write().unwrap();
-                                s.current_response = Some(crate::types::ApiResponse {
-                                    status: 0,
-                                    status_text: String::new(),
-                                    headers: std::collections::HashMap::new(),
-                                    body: String::new(),
-                                    duration: std::time::Duration::from_secs(0),
-                                    is_error: true,
-                                    error_message: Some(err_msg),
-                                });
+                                s.current_response = Some(ApiResponse::error(err_msg));
                                 return;
                             }
 
@@ -1095,18 +1056,7 @@ impl EventHandler {
         }
 
         // Get currently selected endpoint to count params
-        let selected_endpoint = match state_read.view_mode {
-            ViewMode::Flat => state_read.endpoints.get(self.selected_index),
-            ViewMode::Grouped => {
-                state_read
-                    .render_items
-                    .get(self.selected_index)
-                    .and_then(|item| match item {
-                        RenderItem::Endpoint { endpoint } => Some(endpoint),
-                        RenderItem::GroupHeader { .. } => None,
-                    })
-            }
-        };
+        let selected_endpoint = state_read.get_selected_endpoint(self.selected_index);
 
         if let Some(endpoint) = selected_endpoint {
             let path_param_count = endpoint.path_params().len();
@@ -1133,18 +1083,7 @@ impl EventHandler {
             }
 
             // Get currently selected endpoint
-            let selected_endpoint = match state_read.view_mode {
-                ViewMode::Flat => state_read.endpoints.get(self.selected_index),
-                ViewMode::Grouped => {
-                    state_read
-                        .render_items
-                        .get(self.selected_index)
-                        .and_then(|item| match item {
-                            RenderItem::Endpoint { endpoint } => Some(endpoint),
-                            RenderItem::GroupHeader { .. } => None,
-                        })
-                }
-            };
+            let selected_endpoint = state_read.get_selected_endpoint(self.selected_index);
 
             if let Some(endpoint) = selected_endpoint {
                 // Get both path and query parameters
@@ -1218,18 +1157,7 @@ impl EventHandler {
             let new_value = state_read.param_edit_buffer.clone();
 
             // Get currently selected endpoint
-            let selected_endpoint = match state_read.view_mode {
-                ViewMode::Flat => state_read.endpoints.get(self.selected_index),
-                ViewMode::Grouped => {
-                    state_read
-                        .render_items
-                        .get(self.selected_index)
-                        .and_then(|item| match item {
-                            RenderItem::Endpoint { endpoint } => Some(endpoint),
-                            RenderItem::GroupHeader { .. } => None,
-                        })
-                }
-            };
+            let selected_endpoint = state_read.get_selected_endpoint(self.selected_index);
 
             if let Some(endpoint) = selected_endpoint {
                 let endpoint_path = endpoint.path.clone();
@@ -1289,18 +1217,7 @@ impl EventHandler {
         let state_read = state.read().unwrap();
 
         // Get currently selected endpoint
-        let selected_endpoint = match state_read.view_mode {
-            ViewMode::Flat => state_read.endpoints.get(self.selected_index),
-            ViewMode::Grouped => {
-                state_read
-                    .render_items
-                    .get(self.selected_index)
-                    .and_then(|item| match item {
-                        RenderItem::Endpoint { endpoint } => Some(endpoint),
-                        RenderItem::GroupHeader { .. } => None,
-                    })
-            }
-        };
+        let selected_endpoint = state_read.get_selected_endpoint(self.selected_index);
 
         if let Some(endpoint) = selected_endpoint {
             let endpoint = endpoint.clone();
