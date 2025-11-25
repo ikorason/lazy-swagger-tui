@@ -312,23 +312,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotrest"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "color-eyre",
- "crossterm 0.29.0",
- "dirs",
- "ratatui",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "toml",
- "url",
-]
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -832,6 +815,23 @@ checksum = "b011eec8cc36da2aab2d5cff675ec18454fad408585853910a202391cf9f8e65"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "lazy-swagger-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "color-eyre",
+ "crossterm 0.29.0",
+ "dirs",
+ "ratatui",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+ "url",
 ]
 
 [[package]]

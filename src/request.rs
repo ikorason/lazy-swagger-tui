@@ -42,8 +42,18 @@ pub fn execute_request_background(
                 }
             };
 
+        // Convert method string to reqwest::Method
+        let method = match endpoint.method.to_uppercase().as_str() {
+            "GET" => reqwest::Method::GET,
+            "POST" => reqwest::Method::POST,
+            "PUT" => reqwest::Method::PUT,
+            "PATCH" => reqwest::Method::PATCH,
+            "DELETE" => reqwest::Method::DELETE,
+            _ => reqwest::Method::GET, // Default to GET for unknown methods
+        };
+
         // Build and execute request
-        let response = execute_get_request(&full_url, &state).await;
+        let response = execute_request(&full_url, method, &state).await;
 
         // Store response and clear executing flag
         {
@@ -56,8 +66,12 @@ pub fn execute_request_background(
     });
 }
 
-async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiResponse {
-    use std::time::Instant; // Add this import at the top
+async fn execute_request(
+    url: &str,
+    method: reqwest::Method,
+    state: &Arc<RwLock<AppState>>,
+) -> ApiResponse {
+    use std::time::Instant;
 
     // Get auth token if available
     let token = {
@@ -65,9 +79,19 @@ async fn execute_get_request(url: &str, state: &Arc<RwLock<AppState>>) -> ApiRes
         s.auth.token.clone()
     };
 
-    // Build request
+    // Build request with the appropriate HTTP method
     let client = reqwest::Client::new();
-    let mut request_builder = client.get(url);
+    let mut request_builder = client.request(method.clone(), url);
+
+    // Add empty body for methods that typically require it
+    if method == reqwest::Method::POST
+        || method == reqwest::Method::PUT
+        || method == reqwest::Method::PATCH
+    {
+        request_builder = request_builder
+            .header("Content-Type", "application/json")
+            .body("{}");
+    }
 
     // Add bearer token if available
     if let Some(token) = token {
