@@ -34,7 +34,7 @@ pub fn render_header(
     let auth_status = get_auth_status_text(auth_state);
 
     let header_text = format!(
-        "dotREST - {} [{}] | {}",
+        "lazy swagger tui - {} [{}] | {}",
         swagger_url, status_text, auth_status
     );
 
@@ -577,7 +577,7 @@ fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, sta
     lines.push(Line::from("")); // Empty line
 
     let help_text = match &state.request_edit_mode {
-        RequestEditMode::Viewing => "j/k: Navigate  |  e: Edit parameter  |  Space: Execute",
+        RequestEditMode::Viewing => "j/k/↑/↓: Navigate  |  e: Edit parameter  |  Space: Execute",
         RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
     };
 
@@ -806,10 +806,10 @@ fn render_response_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, st
 pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
     let footer_text = match view_mode {
         ViewMode::Flat => {
-            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Group ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Group ,:URL a:Auth q:Quit"
         }
         ViewMode::Grouped => {
-            "Tab:Panel j/k:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Ungroup ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Ungroup ,:URL a:Auth q:Quit"
         }
     };
 

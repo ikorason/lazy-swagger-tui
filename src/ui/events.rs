@@ -466,26 +466,52 @@ impl EventHandler {
 
                         // keep arrow keys for accessibility (optional)
                         KeyCode::Up => {
-                            // Only works when in EndpointsList
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
-                            use crate::types::PanelFocus;
-                            if panel == PanelFocus::EndpointsList {
-                                self.handle_up(state.clone(), list_state);
+                            // Don't handle navigation during parameter editing
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // Do nothing - let user type normally
+                            } else {
+                                use crate::types::PanelFocus;
+                                match panel {
+                                    PanelFocus::EndpointsList => {
+                                        self.handle_up(state.clone(), list_state);
+                                    }
+                                    PanelFocus::Details => {
+                                        if active_tab == DetailTab::Request {
+                                            self.handle_request_param_up(state.clone());
+                                        }
+                                    }
+                                }
                             }
                         }
 
                         KeyCode::Down => {
-                            // Only works when in EndpointsList
                             let state_read = state.read().unwrap();
                             let panel = state_read.panel_focus.clone();
+                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request_edit_mode.clone();
                             drop(state_read);
 
-                            use crate::types::PanelFocus;
-                            if panel == PanelFocus::EndpointsList {
-                                self.handle_down(state.clone(), list_state);
+                            // Don't handle navigation during parameter editing
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // Do nothing - let user type normally
+                            } else {
+                                use crate::types::PanelFocus;
+                                match panel {
+                                    PanelFocus::EndpointsList => {
+                                        self.handle_down(state.clone(), list_state);
+                                    }
+                                    PanelFocus::Details => {
+                                        if active_tab == DetailTab::Request {
+                                            self.handle_request_param_down(state.clone());
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1256,6 +1282,6 @@ fn log_debug(msg: &str) {
     let _ = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("/tmp/dotrest.log")
+        .open("/tmp/lazy-swagger-tui.log")
         .and_then(|mut f| writeln!(f, "{}", msg));
 }

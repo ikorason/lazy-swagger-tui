@@ -32,7 +32,7 @@ Cargo.lock
 
 # Config (you might want to keep config examples)
 # config.toml
-# .dotrest/
+# .lazy-swagger-tui/
 
 # OS
 Thumbs.db

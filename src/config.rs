@@ -34,14 +34,14 @@ impl Config {
             .ok_or_else(|| color_eyre::eyre::eyre!("Could not find home directory"))?;
 
         let config_dir = home_dir.join(".config");
-        let dotrest_dir = config_dir.join("dotrest");
+        let app_dir = config_dir.join("lazy-swagger-tui");
 
         // Create directory if it doesn't exist
-        if !dotrest_dir.exists() {
-            fs::create_dir_all(&dotrest_dir)?;
+        if !app_dir.exists() {
+            fs::create_dir_all(&app_dir)?;
         }
 
-        Ok(dotrest_dir.join("config.toml"))
+        Ok(app_dir.join("config.toml"))
     }
 
     /// Load config from file, or return default if file doesn't exist

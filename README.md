@@ -1,4 +1,4 @@
-# dotREST
+# lazy swagger tui
 
 A Ratatui-based terminal UI for testing ASP.NET Core APIs directly from your terminal.
 
@@ -29,7 +29,7 @@ A Ratatui-based terminal UI for testing ASP.NET Core APIs directly from your ter
 
 ## Authentication
 
-dotREST supports Bearer token authentication:
+lazy swagger tui supports Bearer token authentication:
 
 - Press `a` to set/edit your authentication token
 - Press `A` (Shift+A) to clear the token
@@ -41,12 +41,12 @@ Most APIs require you to authenticate first to get a token:
 
 1. Use Swagger UI or another tool to call your login endpoint
 2. Copy the token from the response
-3. Press `a` in dotREST and paste your token
+3. Press `a` in lazy swagger tui and paste your token
 4. The token will be included in all subsequent requests
 
 ## Configuration
 
-Configuration is stored in `~/.config/dotrest/config.toml`:
+Configuration is stored in `~/.config/lazy-swagger-tui/config.toml`:
 
 ```toml
 [server]
@@ -124,7 +124,7 @@ Endpoints Panel → Endpoint Tab → Headers Tab → Response Tab → (wraps bac
 cargo build --release
 ```
 
-The binary will be available at `target/release/dotrest`.
+The binary will be available at `target/release/lazy-swagger-tui`.
 
 ## Roadmap
 
