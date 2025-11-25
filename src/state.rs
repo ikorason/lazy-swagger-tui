@@ -47,6 +47,15 @@ pub struct AppState {
 
     /// Temporary buffer while editing a param value
     pub param_edit_buffer: String,
+
+    /// Search query for filtering endpoints
+    pub search_query: String,
+
+    /// Filtered endpoints (only populated when search_query is not empty)
+    pub filtered_endpoints: Vec<ApiEndpoint>,
+
+    /// Filtered grouped endpoints (for grouped view)
+    pub filtered_grouped_endpoints: HashMap<String, Vec<ApiEndpoint>>,
 }
 
 impl Default for AppState {
@@ -75,6 +84,9 @@ impl Default for AppState {
             selected_param_index: 0,
             request_edit_mode: RequestEditMode::Viewing,
             param_edit_buffer: String::new(),
+            search_query: String::new(),
+            filtered_endpoints: Vec::new(),
+            filtered_grouped_endpoints: HashMap::new(),
         }
     }
 }
@@ -142,6 +154,71 @@ impl AppState {
                 config
             })
     }
+
+    /// Get the active endpoints list (filtered or full)
+    pub fn active_endpoints(&self) -> &[ApiEndpoint] {
+        if self.search_query.is_empty() {
+            &self.endpoints
+        } else {
+            &self.filtered_endpoints
+        }
+    }
+
+    /// Get the active grouped endpoints (filtered or full)
+    pub fn active_grouped_endpoints(&self) -> &HashMap<String, Vec<ApiEndpoint>> {
+        if self.search_query.is_empty() {
+            &self.grouped_endpoints
+        } else {
+            &self.filtered_grouped_endpoints
+        }
+    }
+
+    /// Filter endpoints based on search query
+    pub fn update_filtered_endpoints(&mut self) {
+        if self.search_query.is_empty() {
+            self.filtered_endpoints.clear();
+            self.filtered_grouped_endpoints.clear();
+            return;
+        }
+
+        let query = self.search_query.to_lowercase();
+
+        // Filter endpoints by path, method, summary, or tags
+        self.filtered_endpoints = self
+            .endpoints
+            .iter()
+            .filter(|ep| {
+                ep.path.to_lowercase().contains(&query)
+                    || ep.method.to_lowercase().contains(&query)
+                    || ep
+                        .summary
+                        .as_ref()
+                        .map(|s| s.to_lowercase().contains(&query))
+                        .unwrap_or(false)
+                    || ep.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
+            })
+            .cloned()
+            .collect();
+
+        // Rebuild grouped endpoints from filtered list
+        self.filtered_grouped_endpoints.clear();
+        for endpoint in &self.filtered_endpoints {
+            for tag in &endpoint.tags {
+                self.filtered_grouped_endpoints
+                    .entry(tag.clone())
+                    .or_insert_with(Vec::new)
+                    .push(endpoint.clone());
+            }
+
+            // Handle endpoints without tags
+            if endpoint.tags.is_empty() {
+                self.filtered_grouped_endpoints
+                    .entry("Other".to_string())
+                    .or_insert_with(Vec::new)
+                    .push(endpoint.clone());
+            }
+        }
+    }
 }
 
 fn json_value_to_string(value: &serde_json::Value) -> String {
@@ -156,16 +233,17 @@ fn json_value_to_string(value: &serde_json::Value) -> String {
 /// Helper function to count visible items in current view mode
 pub fn count_visible_items(state: &AppState) -> usize {
     match state.view_mode {
-        ViewMode::Flat => state.endpoints.len(),
+        ViewMode::Flat => state.active_endpoints().len(),
         ViewMode::Grouped => {
             let mut count = 0;
-            let mut group_names: Vec<&String> = state.grouped_endpoints.keys().collect();
+            let grouped = state.active_grouped_endpoints();
+            let mut group_names: Vec<&String> = grouped.keys().collect();
             group_names.sort();
 
             for group_name in group_names {
                 count += 1; // Group header
                 if state.expanded_groups.contains(group_name) {
-                    let endpoints = &state.grouped_endpoints[group_name];
+                    let endpoints = &grouped[group_name];
                     count += endpoints.len();
                 }
             }

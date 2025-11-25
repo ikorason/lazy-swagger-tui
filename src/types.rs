@@ -187,6 +187,7 @@ pub enum InputMode {
     #[allow(dead_code)]
     ConfirmClearToken,
     EnteringUrl,
+    Searching,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::state::AppState;
 use crate::types::{
-    ApiEndpoint, AuthState, DetailTab, LoadingState, Parameter, RenderItem, RequestEditMode,
-    ViewMode,
+    ApiEndpoint, AuthState, DetailTab, InputMode, LoadingState, Parameter, RenderItem,
+    RequestEditMode, ViewMode,
 };
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::widgets::Wrap;
@@ -45,6 +45,42 @@ pub fn render_header(
     frame.render_widget(header, area);
 }
 
+pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
+    let is_active = matches!(state.input_mode, InputMode::Searching);
+
+    let border_style = if is_active {
+        Style::default().fg(Color::Cyan)
+    } else if !state.search_query.is_empty() {
+        Style::default().fg(Color::Green) // Show filter is active
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    // Show match count if filtering
+    let title = if !state.search_query.is_empty() {
+        let count = state.filtered_endpoints.len();
+        let total = state.endpoints.len();
+        format!(" Search [{}/{}] ", count, total)
+    } else {
+        " Search (/) ".to_string()
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+
+    let search_text = if is_active {
+        format!("{}_", state.search_query) // Show cursor
+    } else {
+        state.search_query.clone()
+    };
+
+    let paragraph = Paragraph::new(search_text).block(block);
+
+    frame.render_widget(paragraph, area);
+}
+
 fn get_auth_status_text(auth: &AuthState) -> String {
     if auth.is_authenticated() {
         let display = auth.get_masked_display();
@@ -69,8 +105,14 @@ pub fn render_endpoints_panel(
             render_error_message(frame, area, error, state.retry_count);
         }
         LoadingState::Complete | LoadingState::Idle => {
-            if state.endpoints.is_empty() {
-                render_empty_message(frame, area);
+            if state.active_endpoints().is_empty() {
+                if !state.search_query.is_empty() {
+                    // Searching but no results
+                    render_no_search_results(frame, area);
+                } else {
+                    // No endpoints loaded
+                    render_empty_message(frame, area);
+                }
             } else {
                 match &state.view_mode {
                     ViewMode::Flat => {
@@ -136,9 +178,17 @@ fn render_empty_message(frame: &mut Frame, area: Rect) {
     frame.render_widget(empty, area);
 }
 
+fn render_no_search_results(frame: &mut Frame, area: Rect) {
+    let empty = Paragraph::new("No matching endpoints\n\nPress [Esc] or [Ctrl+L] to clear search")
+        .style(Style::default().fg(Color::Yellow))
+        .block(Block::default().borders(Borders::ALL).title("Search Results"));
+
+    frame.render_widget(empty, area);
+}
+
 fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state: &mut ListState) {
     let items: Vec<ListItem> = state
-        .endpoints
+        .active_endpoints()
         .iter()
         .map(|endpoint| {
             let method_color = get_method_color(&endpoint.method);
@@ -169,7 +219,7 @@ fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state:
     let list = List::new(items)
         .block(
             Block::default()
-                .title(format!("Endpoints ({})", state.endpoints.len()))
+                .title(format!("Endpoints ({})", state.active_endpoints().len()))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color)),
         )
@@ -240,7 +290,7 @@ fn render_grouped_list(
             Block::default()
                 .title(format!(
                     "Endpoints - {} groups",
-                    state.grouped_endpoints.len()
+                    state.active_grouped_endpoints().len()
                 ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color)),
@@ -835,11 +885,12 @@ fn get_method_color(method: &str) -> Color {
 /// Returns the render_items that should be stored in state
 pub fn build_grouped_render_items(state: &AppState) -> Vec<RenderItem> {
     let mut render_items = Vec::new();
-    let mut group_names: Vec<&String> = state.grouped_endpoints.keys().collect();
+    let grouped = state.active_grouped_endpoints();
+    let mut group_names: Vec<&String> = grouped.keys().collect();
     group_names.sort();
 
     for group_name in group_names {
-        let group_endpoints = &state.grouped_endpoints[group_name];
+        let group_endpoints = &grouped[group_name];
         let is_expanded = state.expanded_groups.contains(group_name);
 
         render_items.push(RenderItem::GroupHeader {

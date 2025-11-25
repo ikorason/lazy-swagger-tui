@@ -54,6 +54,10 @@ impl EventHandler {
                         self.handle_clear_confirmation(key, state.clone())?;
                     }
 
+                    InputMode::Searching => {
+                        self.handle_search_input(key, state.clone(), list_state)?;
+                    }
+
                     InputMode::Normal => match key.code {
                         // QUIT
                         KeyCode::Char('q') => {
@@ -196,6 +200,20 @@ impl EventHandler {
                                 );
                             }
                         }
+                        // search endpoints
+                        KeyCode::Char('/') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat '/' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('/');
+                            } else {
+                                self.handle_search_activate(state.clone());
+                            }
+                        }
 
                         // ctrl + modifiers
                         // retry
@@ -205,6 +223,15 @@ impl EventHandler {
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
                             should_fetch = self.handle_retry(state.clone());
+                        }
+
+                        // Ctrl+l: Clear search filter
+                        KeyCode::Char('l')
+                            if key
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            self.handle_search_clear(state.clone(), list_state);
                         }
 
                         // -- with modifiers
@@ -1251,6 +1278,80 @@ impl EventHandler {
 
             let mut s = state.write().unwrap();
             s.get_or_create_request_config(&endpoint);
+        }
+    }
+
+    fn handle_search_activate(&self, state: Arc<RwLock<AppState>>) {
+        let mut s = state.write().unwrap();
+        s.input_mode = InputMode::Searching;
+        log_debug("Entering search mode");
+    }
+
+    fn handle_search_input(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        state: Arc<RwLock<AppState>>,
+        list_state: &mut ListState,
+    ) -> Result<()> {
+        use crossterm::event::KeyModifiers;
+
+        match key.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                // Exit search mode but keep the filter active
+                let mut s = state.write().unwrap();
+                s.input_mode = InputMode::Normal;
+                log_debug("Exiting search mode");
+            }
+            KeyCode::Backspace => {
+                let mut s = state.write().unwrap();
+                s.search_query.pop();
+                s.update_filtered_endpoints();
+
+                log_debug(&format!("Search query: '{}'", s.search_query));
+
+                // Reset selection to top
+                drop(s);
+                self.selected_index = 0;
+                list_state.select(Some(0));
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Clear search
+                let mut s = state.write().unwrap();
+                s.search_query.clear();
+                s.update_filtered_endpoints();
+                log_debug("Cleared search query");
+
+                drop(s);
+                self.selected_index = 0;
+                list_state.select(Some(0));
+            }
+            KeyCode::Char(c) => {
+                let mut s = state.write().unwrap();
+                s.search_query.push(c);
+                s.update_filtered_endpoints();
+
+                log_debug(&format!("Search query: '{}'", s.search_query));
+
+                // Reset selection to top when search changes
+                drop(s);
+                self.selected_index = 0;
+                list_state.select(Some(0));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_search_clear(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
+        let mut s = state.write().unwrap();
+        if !s.search_query.is_empty() {
+            s.search_query.clear();
+            s.update_filtered_endpoints();
+            log_debug("Cleared search filter");
+
+            drop(s);
+            self.selected_index = 0;
+            list_state.select(Some(0));
         }
     }
 }

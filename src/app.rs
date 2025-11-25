@@ -103,20 +103,21 @@ impl App {
 
         let state = self.state.read().unwrap();
 
-        // Create main layout: Header, Body, Footer
+        // Create main layout: Header, Search Bar, Body, Footer
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Min(0),
-                Constraint::Length(3),
+                Constraint::Length(3), // Header
+                Constraint::Length(3), // Search bar
+                Constraint::Min(0),    // Body
+                Constraint::Length(3), // Footer
             ])
             .split(frame.area());
 
         let body_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-            .split(main_chunks[1]);
+            .split(main_chunks[2]); // Changed from [1] to [2]
 
         let display_url = self.swagger_url.as_deref().unwrap_or("No URL configured");
 
@@ -129,6 +130,9 @@ impl App {
             state.endpoints.len(),
             &state.auth,
         );
+
+        // Render search bar
+        ui::render_search_bar(frame, main_chunks[1], &state);
 
         // Ensure we have a selection if items exist
         if should_select {
@@ -171,7 +175,7 @@ impl App {
             );
 
             // Render footer
-            ui::render_footer(frame, main_chunks[2], &state.view_mode);
+            ui::render_footer(frame, main_chunks[3], &state.view_mode);
         } else {
             // In flat mode, just render remaining panels
             ui::render_details_panel(
@@ -181,7 +185,7 @@ impl App {
                 self.event_handler.selected_index,
             );
 
-            ui::render_footer(frame, main_chunks[2], &state.view_mode);
+            ui::render_footer(frame, main_chunks[3], &state.view_mode);
         }
 
         // Render modals LAST - after everything else (re-borrow state if needed)
@@ -196,7 +200,7 @@ impl App {
             InputMode::ConfirmClearToken => {
                 draw::render_clear_confirmation_modal(frame);
             }
-            InputMode::Normal => {}
+            InputMode::Normal | InputMode::Searching => {}
         }
     }
 
