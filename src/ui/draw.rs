@@ -147,7 +147,7 @@ fn render_loading_spinner(
 
     let loading = Paragraph::new(loading_text)
         .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL).title("Endpoints"));
+        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
 
     frame.render_widget(loading, area);
 }
@@ -166,14 +166,14 @@ fn render_error_message(frame: &mut Frame, area: Rect, error: &str, retry_count:
 
     let error_widget = Paragraph::new(error_msg)
         .style(Style::default().fg(Color::Red))
-        .block(Block::default().borders(Borders::ALL).title("Endpoints"));
+        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
 
     frame.render_widget(error_widget, area);
 }
 
 fn render_empty_message(frame: &mut Frame, area: Rect) {
     let empty = Paragraph::new("No endpoints found\n\nPress [F5] to refresh")
-        .block(Block::default().borders(Borders::ALL).title("Endpoints"));
+        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
 
     frame.render_widget(empty, area);
 }
@@ -181,7 +181,7 @@ fn render_empty_message(frame: &mut Frame, area: Rect) {
 fn render_no_search_results(frame: &mut Frame, area: Rect) {
     let empty = Paragraph::new("No matching endpoints\n\nPress [Esc] or [Ctrl+L] to clear search")
         .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL).title("Search Results"));
+        .block(Block::default().borders(Borders::ALL).title("[1] Search Results"));
 
     frame.render_widget(empty, area);
 }
@@ -219,7 +219,7 @@ fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state:
     let list = List::new(items)
         .block(
             Block::default()
-                .title(format!("Endpoints ({})", state.active_endpoints().len()))
+                .title(format!("[1] Endpoints ({})", state.active_endpoints().len()))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color)),
         )
@@ -289,7 +289,7 @@ fn render_grouped_list(
         .block(
             Block::default()
                 .title(format!(
-                    "Endpoints - {} groups",
+                    "[1] Endpoints - {} groups",
                     state.active_grouped_endpoints().len()
                 ))
                 .borders(Borders::ALL)
@@ -324,7 +324,7 @@ pub fn render_details_panel(
 
     // Create the main block
     let block = Block::default()
-        .title("Details & Response")
+        .title("[2] Details & Response")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color));
 

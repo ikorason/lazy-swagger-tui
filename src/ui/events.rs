@@ -214,6 +214,36 @@ impl EventHandler {
                                 self.handle_search_activate(state.clone());
                             }
                         }
+                        // switch to endpoints panel
+                        KeyCode::Char('1') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat '1' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('1');
+                            } else {
+                                let mut s = state.write().unwrap();
+                                s.panel_focus = PanelFocus::EndpointsList;
+                            }
+                        }
+                        // switch to details panel
+                        KeyCode::Char('2') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request_edit_mode.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat '2' as character input
+                                let mut s = state.write().unwrap();
+                                s.param_edit_buffer.push('2');
+                            } else {
+                                let mut s = state.write().unwrap();
+                                s.panel_focus = PanelFocus::Details;
+                            }
+                        }
 
                         // ctrl + modifiers
                         // retry

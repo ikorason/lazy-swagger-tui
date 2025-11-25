@@ -107,6 +107,8 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | `Tab` | Move right (panel → panel, tab → tab) |
 | `Shift+Tab` | Move left (panel → panel, tab → tab) |
+| `1` | **Focus Endpoints panel (left)** |
+| `2` | **Focus Details panel (right)** |
 | `/` | **Search/filter endpoints** |
 | `Ctrl+L` | Clear search filter |
 | `,` | Configure URLs |
@@ -149,6 +151,7 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 ## Tips & Tricks
 
 - **Quick Testing**: Select an endpoint and press `Space` to execute. Press `Space` again in the Details panel to re-execute.
+- **Panel Switching**: Press `1` to jump to Endpoints panel, `2` to jump to Details panel. Or use `Tab`/`Shift+Tab` to cycle through.
 - **Search**: Press `/` and start typing to filter endpoints. The filter stays active even after you exit search mode with `Esc`. Clear with `Ctrl+L`.
 - **Parameters**: Navigate to the Request tab to configure path and query parameters before executing endpoints. Press `e` to edit, `Enter` to confirm.
 - **Compare Responses**: Switch between Headers and Response tabs to inspect different aspects of the API response.
