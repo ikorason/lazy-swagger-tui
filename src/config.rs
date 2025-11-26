@@ -117,3 +117,70 @@ pub fn extract_base_url(swagger_url: &str) -> String {
         swagger_url.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_url_valid_http() {
+        assert!(validate_url("http://localhost:5000").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_valid_https() {
+        assert!(validate_url("https://api.example.com/swagger/v1/swagger.json").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_empty() {
+        let result = validate_url("");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "URL cannot be empty");
+    }
+
+    #[test]
+    fn test_validate_url_no_protocol() {
+        let result = validate_url("localhost:5000");
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "URL must start with http:// or https://"
+        );
+    }
+
+    #[test]
+    fn test_validate_url_invalid_protocol() {
+        let result = validate_url("ftp://example.com");
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "URL must start with http:// or https://"
+        );
+    }
+
+    #[test]
+    fn test_extract_base_url_with_path() {
+        let result = extract_base_url("http://localhost:5000/swagger/v1/swagger.json");
+        assert_eq!(result, "http://localhost:5000");
+    }
+
+    #[test]
+    fn test_extract_base_url_with_custom_port() {
+        let result = extract_base_url("https://api.example.com:8080/api/swagger.json");
+        assert_eq!(result, "https://api.example.com:8080");
+    }
+
+    #[test]
+    fn test_extract_base_url_no_port() {
+        let result = extract_base_url("https://api.example.com/v1/swagger.json");
+        assert_eq!(result, "https://api.example.com");
+    }
+
+    #[test]
+    fn test_extract_base_url_invalid_returns_original() {
+        let invalid = "not-a-valid-url";
+        let result = extract_base_url(invalid);
+        assert_eq!(result, invalid);
+    }
+}

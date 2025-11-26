@@ -37,7 +37,8 @@ pub fn execute_request_background(
                     // Handle URL building error
                     let mut s = state.write().unwrap();
                     s.executing_endpoint = None;
-                    s.current_response = Some(ApiResponse::error(format!("Failed to build URL: {}", e)));
+                    s.current_response =
+                        Some(ApiResponse::error(format!("Failed to build URL: {}", e)));
                     return;
                 }
             };
@@ -165,7 +166,7 @@ async fn execute_request(
 }
 
 /// Build a full URL with path and query parameters
-fn build_url_with_params(
+pub(crate) fn build_url_with_params(
     base_url: &str,
     path_template: &str,
     path_params: &HashMap<String, String>,
@@ -195,4 +196,188 @@ fn build_url_with_params(
     }
 
     Ok(url.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_url_basic() {
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users",
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users");
+    }
+
+    #[test]
+    fn test_build_url_with_single_path_param() {
+        let mut path_params = HashMap::new();
+        path_params.insert("id".to_string(), "123".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users/{id}",
+            &path_params,
+            &HashMap::new(),
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users/123");
+    }
+
+    #[test]
+    fn test_build_url_with_multiple_path_params() {
+        let mut path_params = HashMap::new();
+        path_params.insert("userId".to_string(), "42".to_string());
+        path_params.insert("postId".to_string(), "99".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users/{userId}/posts/{postId}",
+            &path_params,
+            &HashMap::new(),
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users/42/posts/99");
+    }
+
+    #[test]
+    fn test_build_url_with_single_query_param() {
+        let mut query_params = HashMap::new();
+        query_params.insert("limit".to_string(), "10".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users",
+            &HashMap::new(),
+            &query_params,
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users?limit=10");
+    }
+
+    #[test]
+    fn test_build_url_with_multiple_query_params() {
+        let mut query_params = HashMap::new();
+        query_params.insert("skip".to_string(), "20".to_string());
+        query_params.insert("limit".to_string(), "10".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users",
+            &HashMap::new(),
+            &query_params,
+        )
+        .unwrap();
+
+        // Query params order is not guaranteed, so check both possibilities
+        assert!(
+            url == "http://localhost:5000/users?skip=20&limit=10"
+                || url == "http://localhost:5000/users?limit=10&skip=20"
+        );
+    }
+
+    #[test]
+    fn test_build_url_with_path_and_query_params() {
+        let mut path_params = HashMap::new();
+        path_params.insert("id".to_string(), "123".to_string());
+
+        let mut query_params = HashMap::new();
+        query_params.insert("include".to_string(), "profile".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users/{id}",
+            &path_params,
+            &query_params,
+        );
+        assert_eq!(
+            url.unwrap(),
+            "http://localhost:5000/users/123?include=profile"
+        );
+    }
+
+    #[test]
+    fn test_build_url_empty_query_params_ignored() {
+        let mut query_params = HashMap::new();
+        query_params.insert("limit".to_string(), "10".to_string());
+        query_params.insert("filter".to_string(), "".to_string()); // Empty value
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users",
+            &HashMap::new(),
+            &query_params,
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users?limit=10");
+    }
+
+    #[test]
+    fn test_build_url_with_trailing_slash_in_base() {
+        let url = build_url_with_params(
+            "http://localhost:5000/",
+            "/users",
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        assert_eq!(url.unwrap(), "http://localhost:5000/users");
+    }
+
+    #[test]
+    fn test_build_url_special_chars_in_query_params() {
+        let mut query_params = HashMap::new();
+        query_params.insert("search".to_string(), "hello world".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users",
+            &HashMap::new(),
+            &query_params,
+        );
+        // URL encoding should happen automatically
+        assert_eq!(
+            url.unwrap(),
+            "http://localhost:5000/users?search=hello+world"
+        );
+    }
+
+    #[test]
+    fn test_build_url_path_param_not_in_template() {
+        let mut path_params = HashMap::new();
+        path_params.insert("id".to_string(), "123".to_string());
+        path_params.insert("unused".to_string(), "value".to_string());
+
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users/{id}",
+            &path_params,
+            &HashMap::new(),
+        );
+        // Should still work, unused params are ignored
+        assert_eq!(url.unwrap(), "http://localhost:5000/users/123");
+    }
+
+    #[test]
+    fn test_build_url_missing_path_param() {
+        let url = build_url_with_params(
+            "http://localhost:5000",
+            "/users/{id}",
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        // Path placeholder remains unreplaced, but gets URL encoded by the Url parser
+        assert_eq!(url.unwrap(), "http://localhost:5000/users/%7Bid%7D");
+    }
+
+    #[test]
+    fn test_build_url_invalid_base() {
+        let url = build_url_with_params(
+            "not a valid url",
+            "/users",
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        assert!(url.is_err());
+        assert!(url.unwrap_err().contains("Invalid URL"));
+    }
 }
