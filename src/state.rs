@@ -23,6 +23,7 @@ pub struct UiState {
     pub response_body_scroll: usize,
     pub headers_scroll: usize,
     pub selected_param_index: usize,
+    pub body_section_expanded: bool,
 }
 
 /// Modal/form input state
@@ -33,6 +34,7 @@ pub struct InputState {
     pub url_input: String,
     pub base_url_input: String,
     pub active_url_field: UrlInputField,
+    pub body_input: String,
 }
 
 /// HTTP request and authentication state
@@ -81,6 +83,7 @@ impl Default for AppState {
                 response_body_scroll: 0,
                 headers_scroll: 0,
                 selected_param_index: 0,
+                body_section_expanded: true,
             },
             input: InputState {
                 mode: InputMode::Normal,
@@ -88,6 +91,7 @@ impl Default for AppState {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
+                body_input: String::new(),
             },
             request: RequestState {
                 auth: AuthState::new(),

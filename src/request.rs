@@ -20,13 +20,19 @@ pub fn execute_request_background(
 
     // Spawn background task
     tokio::spawn(async move {
-        // Get path and query parameters from request config
-        let (path_params, query_params) = {
+        // Get path, query parameters, and body from request config
+        let (path_params, query_params, body) = {
             let s = state.read().unwrap();
             s.request
                 .configs
                 .get(&endpoint.path)
-                .map(|config| (config.path_params.clone(), config.query_params.clone()))
+                .map(|config| {
+                    (
+                        config.path_params.clone(),
+                        config.query_params.clone(),
+                        config.body.clone(),
+                    )
+                })
                 .unwrap_or_default()
         };
 
@@ -55,7 +61,7 @@ pub fn execute_request_background(
         };
 
         // Build and execute request
-        let response = execute_request(&full_url, method, &state).await;
+        let response = execute_request(&full_url, method, &state, body).await;
 
         // Store response and clear executing flag
         {
@@ -72,6 +78,7 @@ async fn execute_request(
     url: &str,
     method: reqwest::Method,
     state: &Arc<RwLock<AppState>>,
+    body: Option<String>,
 ) -> ApiResponse {
     use std::time::Instant;
 
@@ -85,14 +92,19 @@ async fn execute_request(
     let client = reqwest::Client::new();
     let mut request_builder = client.request(method.clone(), url);
 
-    // Add empty body for methods that typically require it
+    // Add body for methods that support it
     if method == reqwest::Method::POST
         || method == reqwest::Method::PUT
         || method == reqwest::Method::PATCH
     {
-        request_builder = request_builder
-            .header("Content-Type", "application/json")
-            .body("{}");
+        request_builder = request_builder.header("Content-Type", "application/json");
+
+        // Use provided body or default to empty object
+        if let Some(body_str) = body {
+            request_builder = request_builder.body(body_str);
+        } else {
+            request_builder = request_builder.body("{}");
+        }
     }
 
     // Add bearer token if available

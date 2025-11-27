@@ -35,6 +35,8 @@ pub enum AppAction {
     ExitTokenInputMode,
     EnterSearchMode,
     ExitSearchMode,
+    EnterBodyInputMode,
+    ExitBodyInputMode,
     EnterConfirmClearTokenMode,
     ExitConfirmClearTokenMode,
     SetActiveUrlField(UrlInputField),
@@ -44,14 +46,17 @@ pub enum AppAction {
     AppendToBaseUrlInput(String),
     AppendToTokenInput(String),
     AppendToSearchQuery(String),
+    AppendToBodyInput(String),
     ClearUrlInput,
     ClearBaseUrlInput,
     ClearTokenInput,
     ClearSearchQuery,
+    ClearBodyInput,
     BackspaceUrlInput,
     BackspaceBaseUrlInput,
     BackspaceTokenInput,
     BackspaceSearchQuery,
+    BackspaceBodyInput,
     DeleteWordUrlInput,
     DeleteWordBaseUrlInput,
     DeleteWordTokenInput,
@@ -81,6 +86,9 @@ pub enum AppAction {
     ResetParamIndex,
     ResetResponseScroll,
     ResetHeadersScroll,
+
+    // Body section actions
+    ToggleBodySection,
 }
 
 /// Apply an action to the application state
@@ -229,6 +237,14 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ExitSearchMode => {
             state.input.mode = InputMode::Normal;
         }
+        AppAction::EnterBodyInputMode => {
+            state.input.mode = InputMode::EnteringBody;
+            // Body input is pre-populated by caller
+        }
+        AppAction::ExitBodyInputMode => {
+            state.input.mode = InputMode::Normal;
+            state.input.body_input.clear();
+        }
         AppAction::EnterConfirmClearTokenMode => {
             state.input.mode = InputMode::ConfirmClearToken;
         }
@@ -252,6 +268,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::AppendToSearchQuery(text) => {
             state.search.query.push_str(&text);
         }
+        AppAction::AppendToBodyInput(text) => {
+            state.input.body_input.push_str(&text);
+        }
         AppAction::ClearUrlInput => {
             state.input.url_input.clear();
         }
@@ -264,6 +283,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ClearSearchQuery => {
             state.search.query.clear();
         }
+        AppAction::ClearBodyInput => {
+            state.input.body_input.clear();
+        }
         AppAction::BackspaceUrlInput => {
             state.input.url_input.pop();
         }
@@ -275,6 +297,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::BackspaceSearchQuery => {
             state.search.query.pop();
+        }
+        AppAction::BackspaceBodyInput => {
+            state.input.body_input.pop();
         }
         AppAction::DeleteWordUrlInput => {
             delete_word(&mut state.input.url_input);
@@ -374,6 +399,11 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ResetHeadersScroll => {
             state.ui.headers_scroll = 0;
         }
+
+        // Body section
+        AppAction::ToggleBodySection => {
+            state.ui.body_section_expanded = !state.ui.body_section_expanded;
+        }
     }
 }
 
@@ -415,6 +445,7 @@ mod tests {
                 response_body_scroll: 0,
                 headers_scroll: 0,
                 selected_param_index: 0,
+                body_section_expanded: true,
             },
             input: InputState {
                 mode: InputMode::Normal,
@@ -422,6 +453,7 @@ mod tests {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
+                body_input: String::new(),
             },
             request: RequestState {
                 auth: AuthState::new(),

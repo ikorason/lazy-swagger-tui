@@ -178,6 +178,9 @@ impl App {
             InputMode::ConfirmClearToken => {
                 draw::render_clear_confirmation_modal(frame);
             }
+            InputMode::EnteringBody => {
+                draw::render_body_input_modal(frame, &state);
+            }
             InputMode::Normal | InputMode::Searching => {}
         }
         // state read lock is automatically dropped here

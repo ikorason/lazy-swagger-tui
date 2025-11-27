@@ -66,8 +66,8 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
     let path_params: Vec<&Parameter> = endpoint.path_params();
     let query_params: Vec<&Parameter> = endpoint.query_params();
 
-    // Check if there are ANY parameters at all
-    if path_params.is_empty() && query_params.is_empty() {
+    // Check if there are ANY parameters or body support
+    if path_params.is_empty() && query_params.is_empty() && !endpoint.supports_body() {
         lines.push(Line::from(Span::styled(
             "No parameters defined for this endpoint",
             Style::default().fg(Color::DarkGray),
@@ -80,6 +80,15 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
 
     // Get request config for this endpoint
     let config = state.request.configs.get(&endpoint.path);
+
+    // Show helpful message if no parameters but has body support
+    if path_params.is_empty() && query_params.is_empty() && endpoint.supports_body() {
+        lines.push(Line::from(Span::styled(
+            "No parameters defined for this endpoint",
+            Style::default().fg(Color::DarkGray),
+        )));
+        lines.push(Line::from("")); // Empty line
+    }
 
     let total_path_params = path_params.len();
 
@@ -183,7 +192,63 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
         lines.push(Line::from("")); // Empty line after query params
     }
 
-    // ===== SECTION 3: URL Preview =====
+    // ===== SECTION 3: Request Body (for POST/PUT/PATCH) =====
+    if endpoint.supports_body() {
+        lines.push(Line::from("")); // Empty line
+
+        // Collapsible header
+        let expand_icon = if state.ui.body_section_expanded {
+            "▼"
+        } else {
+            "▶"
+        };
+        let header_text = format!("{expand_icon} Request Body:");
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                header_text,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                "[Press 'b' to edit, 'x' to toggle]",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+
+        if state.ui.body_section_expanded {
+            lines.push(Line::from("")); // Empty line
+
+            // Get current body value
+            let body_value = config
+                .and_then(|c| c.body.as_ref())
+                .map(|s| s.as_str())
+                .unwrap_or("{}");
+
+            // Display body (truncate if too long)
+            let body_lines: Vec<&str> = body_value.lines().collect();
+            let preview_lines = if body_lines.len() > 5 {
+                let mut preview = body_lines[..5].to_vec();
+                preview.push("  ... (press 'b' to edit)");
+                preview
+            } else {
+                body_lines
+            };
+
+            for line in preview_lines {
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", line),
+                    Style::default().fg(Color::Yellow),
+                )));
+            }
+        }
+
+        lines.push(Line::from("")); // Empty line after body
+    }
+
+    // ===== SECTION 4: URL Preview =====
     lines.push(Line::from(Span::styled(
         "Preview URL:",
         Style::default()
@@ -203,11 +268,17 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
         Style::default().fg(Color::Yellow),
     )));
 
-    // ===== SECTION 4: Help Text =====
+    // ===== SECTION 5: Help Text =====
     lines.push(Line::from("")); // Empty line
 
     let help_text = match &state.request.edit_mode {
-        RequestEditMode::Viewing => "j/k/↑/↓: Navigate  |  e: Edit parameter  |  Space: Execute",
+        RequestEditMode::Viewing => {
+            if endpoint.supports_body() {
+                "j/k/↑/↓: Navigate  |  e: Edit param  |  b: Edit body  |  x: Toggle body  |  Space: Execute"
+            } else {
+                "j/k/↑/↓: Navigate  |  e: Edit parameter  |  Space: Execute"
+            }
+        }
         RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
     };
 

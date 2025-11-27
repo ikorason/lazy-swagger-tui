@@ -55,6 +55,14 @@ impl ApiEndpoint {
             .map(|param| param.name.clone())
             .collect()
     }
+
+    /// Check if this endpoint supports request body (POST/PUT/PATCH)
+    pub fn supports_body(&self) -> bool {
+        matches!(
+            self.method.to_uppercase().as_str(),
+            "POST" | "PUT" | "PATCH"
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,8 +94,8 @@ pub struct ParameterSchema {
 pub struct RequestConfig {
     pub query_params: HashMap<String, String>,
     pub path_params: HashMap<String, String>,
+    pub body: Option<String>,
     // Future additions:
-    // pub body: Option<String>,
     // pub headers: HashMap<String, String>,
 }
 
@@ -187,6 +195,7 @@ pub enum InputMode {
     ConfirmClearToken,
     EnteringUrl,
     Searching,
+    EnteringBody,
 }
 
 #[derive(Debug, Clone, PartialEq)]

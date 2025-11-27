@@ -365,3 +365,145 @@ pub fn handle_auth_dialog(state: Arc<RwLock<AppState>>) {
     );
     log_debug("Entering token input mode");
 }
+
+/// Handle body dialog activation
+pub fn handle_body_dialog(state: Arc<RwLock<AppState>>, selected_index: usize) {
+    // Pre-fill with current body if exists
+    let (current_body, endpoint_path) = {
+        let s = state.read().unwrap();
+        let endpoint = s.get_selected_endpoint(selected_index);
+        let path = endpoint.as_ref().map(|ep| ep.path.clone());
+        let body = path
+            .as_ref()
+            .and_then(|p| s.request.configs.get(p))
+            .and_then(|c| c.body.clone())
+            .unwrap_or_else(|| "{}".to_string());
+        (body, path)
+    };
+
+    if endpoint_path.is_some() {
+        apply_many(
+            state,
+            vec![
+                AppAction::EnterBodyInputMode,
+                AppAction::AppendToBodyInput(current_body),
+            ],
+        );
+        log_debug("Entering body input mode");
+    }
+}
+
+/// Handle body input modal (with paste batching and formatting support)
+pub fn handle_body_input(
+    key: crossterm::event::KeyEvent,
+    state: Arc<RwLock<AppState>>,
+    selected_index: usize,
+) -> Result<()> {
+    use crossterm::event::KeyModifiers;
+
+    match key.code {
+        KeyCode::Enter => {
+            let state_read = state.read().unwrap();
+            let body_value = state_read.input.body_input.clone();
+
+            // Get the current endpoint path
+            let endpoint_path = state_read
+                .get_selected_endpoint(selected_index)
+                .map(|ep| ep.path.clone());
+
+            drop(state_read);
+
+            if let Some(path) = endpoint_path {
+                // Try to format JSON
+                let formatted_body =
+                    match serde_json::from_str::<serde_json::Value>(&body_value) {
+                        Ok(json) => {
+                            // Valid JSON - prettify it
+                            serde_json::to_string_pretty(&json).unwrap_or(body_value.clone())
+                        }
+                        Err(_) => {
+                            // Invalid JSON - keep as-is (no validation for now)
+                            body_value.clone()
+                        }
+                    };
+
+                let mut s = state.write().unwrap();
+
+                // Save formatted body to config
+                let config = s.get_or_create_request_config_by_path(&path);
+                config.body = if formatted_body.trim().is_empty() {
+                    None
+                } else {
+                    Some(formatted_body)
+                };
+
+                // Close modal
+                s.input.mode = InputMode::Normal;
+                s.input.body_input.clear();
+
+                log_debug("Body saved and formatted");
+            }
+        }
+
+        KeyCode::Esc => {
+            let mut s = state.write().unwrap();
+            s.input.mode = InputMode::Normal;
+            s.input.body_input.clear();
+            log_debug("Body input cancelled");
+        }
+
+        KeyCode::Backspace => {
+            let mut s = state.write().unwrap();
+            s.input.body_input.pop();
+        }
+
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+U: Clear entire body
+            let mut s = state.write().unwrap();
+            s.input.body_input.clear();
+            log_debug("Cleared body input");
+        }
+
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Paste batching support (same pattern as URL/token input)
+            let mut chars = vec![c];
+
+            loop {
+                match event::poll(std::time::Duration::from_millis(0)) {
+                    Ok(true) => {
+                        if let Ok(Event::Key(next_key)) = event::read() {
+                            match next_key.code {
+                                KeyCode::Char(next_c)
+                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                                {
+                                    chars.push(next_c);
+                                }
+                                _ => break,
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    _ => break,
+                }
+            }
+
+            let char_count = chars.len();
+            let mut s = state.write().unwrap();
+            for ch in chars {
+                s.input.body_input.push(ch);
+            }
+
+            if char_count > 1 {
+                log_debug(&format!(
+                    "Batched {} characters (paste detected)",
+                    char_count
+                ));
+            }
+        }
+
+        _ => {}
+    }
+
+    Ok(())
+}
