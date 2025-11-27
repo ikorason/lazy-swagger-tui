@@ -173,6 +173,18 @@ impl AppState {
         }
     }
 
+    /// Get an endpoint by its path
+    pub fn get_selected_endpoint_by_path(&self, path: &str) -> Option<&ApiEndpoint> {
+        self.endpoints.iter().find(|ep| ep.path == path)
+    }
+
+    /// Get or create request config by endpoint path
+    pub fn get_or_create_request_config_by_path(&mut self, path: &str) -> &mut RequestConfig {
+        self.request_configs
+            .entry(path.to_string())
+            .or_insert_with(RequestConfig::default)
+    }
+
     /// Filter endpoints based on search query
     pub fn update_filtered_endpoints(&mut self) {
         if self.search_query.is_empty() {
@@ -195,7 +207,10 @@ impl AppState {
                         .as_ref()
                         .map(|s| s.to_lowercase().contains(&query))
                         .unwrap_or(false)
-                    || ep.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
+                    || ep
+                        .tags
+                        .iter()
+                        .any(|tag| tag.to_lowercase().contains(&query))
             })
             .cloned()
             .collect();

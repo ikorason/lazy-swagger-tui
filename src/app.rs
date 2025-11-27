@@ -27,7 +27,7 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         let mut list_state = ListState::default();
-        list_state.select(Some(0));
+        list_state.select(None);
 
         // Load config
         let config = Config::load().unwrap();
@@ -41,8 +41,10 @@ impl Default for App {
             InputMode::Normal
         };
 
-        let mut state = AppState::default();
-        state.input_mode = initial_input_mode;
+        let state = AppState {
+            input_mode: initial_input_mode,
+            ..Default::default()
+        };
 
         Self {
             state: Arc::new(RwLock::new(state)),

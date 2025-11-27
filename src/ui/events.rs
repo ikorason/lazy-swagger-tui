@@ -1,9 +1,10 @@
+use crate::actions::{AppAction, apply_action};
 use crate::config;
 use crate::request::execute_request_background;
 use crate::state::{AppState, count_visible_items};
 use crate::types::{
     ApiEndpoint, ApiResponse, DetailTab, InputMode, PanelFocus, RenderItem, RequestConfig,
-    RequestEditMode, UrlInputField, UrlSubmission, ViewMode,
+    RequestEditMode, UrlSubmission, ViewMode,
 };
 
 use color_eyre::Result;
@@ -216,33 +217,19 @@ impl EventHandler {
                         }
                         // switch to endpoints panel
                         KeyCode::Char('1') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat '1' as character input
-                                let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('1');
-                            } else {
-                                let mut s = state.write().unwrap();
-                                s.panel_focus = PanelFocus::EndpointsList;
-                            }
+                            self.apply_or_char(
+                                state.clone(),
+                                '1',
+                                AppAction::NavigateToPanel(PanelFocus::EndpointsList),
+                            );
                         }
                         // switch to details panel
                         KeyCode::Char('2') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat '2' as character input
-                                let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('2');
-                            } else {
-                                let mut s = state.write().unwrap();
-                                s.panel_focus = PanelFocus::Details;
-                            }
+                            self.apply_or_char(
+                                state.clone(),
+                                '2',
+                                AppAction::NavigateToPanel(PanelFocus::Details),
+                            );
                         }
 
                         // ctrl + modifiers
@@ -275,24 +262,8 @@ impl EventHandler {
                             let panel = state_read.panel_focus.clone();
                             drop(state_read);
 
-                            use crate::types::PanelFocus;
-
                             if panel == PanelFocus::Details {
-                                let mut s = state.write().unwrap();
-                                use crate::types::DetailTab;
-
-                                match s.active_detail_tab {
-                                    DetailTab::Response => {
-                                        s.response_body_scroll =
-                                            s.response_body_scroll.saturating_sub(5);
-                                    }
-                                    DetailTab::Headers => {
-                                        s.headers_scroll = s.headers_scroll.saturating_sub(5);
-                                    }
-                                    DetailTab::Endpoint | DetailTab::Request => {
-                                        // Endpoint tab doesn't scroll
-                                    }
-                                }
+                                self.apply(state.clone(), AppAction::ScrollUp);
                             }
                         }
                         // Ctrl+d: Scroll down in focused section
@@ -306,87 +277,18 @@ impl EventHandler {
                             drop(state_read);
 
                             if panel == PanelFocus::Details {
-                                let mut s = state.write().unwrap();
-
-                                match s.active_detail_tab {
-                                    DetailTab::Response => {
-                                        s.response_body_scroll =
-                                            s.response_body_scroll.saturating_add(5);
-                                    }
-                                    DetailTab::Headers => {
-                                        s.headers_scroll = s.headers_scroll.saturating_add(5);
-                                    }
-                                    DetailTab::Endpoint | DetailTab::Request => {
-                                        // Endpoint tab doesn't scroll
-                                    }
-                                }
+                                self.apply(state.clone(), AppAction::ScrollDown);
                             }
                         }
 
                         // Special keys --
                         // tab navigation
                         KeyCode::Tab => {
-                            let mut s = state.write().unwrap();
-                            use crate::types::{DetailTab, PanelFocus};
-
-                            match s.panel_focus {
-                                PanelFocus::EndpointsList => {
-                                    // Move from Endpoints panel to Details panel (Endpoint tab)
-                                    s.panel_focus = PanelFocus::Details;
-                                    s.active_detail_tab = DetailTab::Endpoint;
-                                    s.selected_param_index = 0; // Reset to first param
-                                }
-                                PanelFocus::Details => {
-                                    // Cycle through tabs in Details panel
-                                    s.active_detail_tab = match s.active_detail_tab {
-                                        DetailTab::Endpoint => {
-                                            s.selected_param_index = 0; // Reset when entering Request tab
-                                            DetailTab::Request
-                                        }
-                                        DetailTab::Request => DetailTab::Headers,
-                                        DetailTab::Headers => DetailTab::Response,
-                                        DetailTab::Response => {
-                                            // Wrap back to Endpoints panel
-                                            s.panel_focus = PanelFocus::EndpointsList;
-                                            DetailTab::Endpoint // Reset to first tab for next time
-                                        }
-                                    };
-                                }
-                            }
+                            self.apply(state.clone(), AppAction::NavigateTabForward);
                         }
                         // Shift+Tab (BackTab) - move left
                         KeyCode::BackTab => {
-                            let mut s = state.write().unwrap();
-                            use crate::types::{DetailTab, PanelFocus};
-
-                            match s.panel_focus {
-                                PanelFocus::EndpointsList => {
-                                    // Move from Endpoints panel to Details panel (Response tab - rightmost)
-                                    s.panel_focus = PanelFocus::Details;
-                                    s.active_detail_tab = DetailTab::Response;
-                                }
-                                PanelFocus::Details => {
-                                    // Cycle backwards through tabs in Details panel
-                                    match s.active_detail_tab {
-                                        DetailTab::Request => {
-                                            s.selected_param_index = 0; // Reset when leaving Request tab
-                                            s.active_detail_tab = DetailTab::Endpoint;
-                                        }
-                                        DetailTab::Response => {
-                                            s.active_detail_tab = DetailTab::Headers;
-                                        }
-                                        DetailTab::Headers => {
-                                            s.selected_param_index = 0; // Reset when entering Request tab
-                                            s.active_detail_tab = DetailTab::Request;
-                                        }
-                                        DetailTab::Endpoint => {
-                                            // Wrap back to Endpoints panel
-                                            s.panel_focus = PanelFocus::EndpointsList;
-                                            // Keep active_detail_tab as Endpoint - don't change it
-                                        }
-                                    }
-                                }
-                            }
+                            self.apply(state.clone(), AppAction::NavigateTabBackward);
                         }
                         // space  - execute & expand
                         KeyCode::Char(' ') => {
@@ -413,7 +315,9 @@ impl EventHandler {
                                         // Space in Details panel: Execute current endpoint again
                                         let state_read = state.read().unwrap();
 
-                                        let selected_endpoint = state_read.get_selected_endpoint(self.selected_index).cloned();
+                                        let selected_endpoint = state_read
+                                            .get_selected_endpoint(self.selected_index)
+                                            .cloned();
 
                                         if let Some(endpoint) = selected_endpoint {
                                             if let Some(base_url) = base_url.clone() {
@@ -433,15 +337,12 @@ impl EventHandler {
                                                 if let Err(err_msg) =
                                                     can_execute_endpoint(&endpoint, config)
                                                 {
-                                                    log_debug(&format!(
-                                                        "Cannot execute: {}",
-                                                        err_msg
-                                                    ));
                                                     drop(state_read);
 
                                                     // Store error in response so user can see it
                                                     let mut s = state.write().unwrap();
-                                                    s.current_response = Some(ApiResponse::error(err_msg));
+                                                    s.current_response =
+                                                        Some(ApiResponse::error(err_msg));
                                                     return Ok((false, None));
                                                 }
 
@@ -498,8 +399,7 @@ impl EventHandler {
                                 && active_tab == DetailTab::Request
                                 && matches!(edit_mode, RequestEditMode::Editing(_))
                             {
-                                let mut s = state.write().unwrap();
-                                s.param_edit_buffer.pop();
+                                self.apply(state.clone(), AppAction::BackspaceParamBuffer);
                             }
                         }
                         // esc - cancel param edit
@@ -517,7 +417,7 @@ impl EventHandler {
                                 && active_tab == DetailTab::Request
                                 && matches!(edit_mode, RequestEditMode::Editing(_))
                             {
-                                self.handle_request_param_cancel(state.clone());
+                                self.apply(state.clone(), AppAction::CancelParameterEdit);
                             }
                         }
 
@@ -606,20 +506,59 @@ impl EventHandler {
         Ok((should_fetch, url_submitted))
     }
 
+    // ============================================================================
+    // Helper functions for action pattern
+    // ============================================================================
+
+    /// Check if currently editing a parameter
+    fn is_editing(&self, state: &Arc<RwLock<AppState>>) -> bool {
+        let state_read = state.read().unwrap();
+        matches!(state_read.request_edit_mode, RequestEditMode::Editing(_))
+    }
+
+    /// Apply an action that might depend on edit mode
+    /// If editing, treat as character input, otherwise apply the action
+    fn apply_or_char(&self, state: Arc<RwLock<AppState>>, ch: char, action: AppAction) {
+        if self.is_editing(&state) {
+            let mut s = state.write().unwrap();
+            apply_action(AppAction::AppendToParamBuffer(ch.to_string()), &mut s);
+        } else {
+            let mut s = state.write().unwrap();
+            apply_action(action, &mut s);
+        }
+    }
+
+    /// Apply a single action to state
+    fn apply(&self, state: Arc<RwLock<AppState>>, action: AppAction) {
+        let mut s = state.write().unwrap();
+        apply_action(action, &mut s);
+    }
+
+    /// Apply multiple actions to state
+    fn apply_many(&self, state: Arc<RwLock<AppState>>, actions: Vec<AppAction>) {
+        let mut s = state.write().unwrap();
+        for action in actions {
+            apply_action(action, &mut s);
+        }
+    }
+
+    // ============================================================================
+    // Modal and dialog handlers
+    // ============================================================================
+
     fn handle_url_dialog(
         &self,
         state: Arc<RwLock<AppState>>,
         swagger_url: Option<String>,
         base_url: Option<String>,
     ) {
-        let mut s = state.write().unwrap();
-        s.input_mode = InputMode::EnteringUrl;
-
-        // pre-fill with current swagger URL if exists
-        s.url_input = swagger_url.unwrap_or_default();
-        s.base_url_input = base_url.unwrap_or_default();
-        s.active_url_field = UrlInputField::SwaggerUrl;
-
+        self.apply(
+            state,
+            AppAction::EnterUrlInputMode {
+                swagger_url,
+                base_url,
+            },
+        );
         log_debug("Entering URL input mode");
     }
 
@@ -633,18 +572,11 @@ impl EventHandler {
 
         match key.code {
             KeyCode::Tab => {
-                // Switch between fields and auto-extract when leaving swagger field
+                // Switch between fields
                 let mut s = state.write().unwrap();
 
                 match s.active_url_field {
                     UrlInputField::SwaggerUrl => {
-                        // Moving from Swagger to Base - only auto-extract if base is empty
-                        if !s.url_input.is_empty() && s.base_url_input.is_empty() {
-                            s.base_url_input = config::extract_base_url(&s.url_input);
-                            log_debug(&format!("Auto-extracted base URL: {}", s.base_url_input));
-                        } else if !s.base_url_input.is_empty() {
-                            log_debug("Base URL already exists, not auto-extracting");
-                        }
                         s.active_url_field = UrlInputField::BaseUrl;
                     }
                     UrlInputField::BaseUrl => {
@@ -756,7 +688,22 @@ impl EventHandler {
                 }
             }
 
-            KeyCode::Char(c) => {
+            KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+L: Clear current field (matching search behavior)
+                let mut s = state.write().unwrap();
+                match s.active_url_field {
+                    UrlInputField::SwaggerUrl => {
+                        s.url_input.clear();
+                        log_debug("Cleared swagger URL input");
+                    }
+                    UrlInputField::BaseUrl => {
+                        s.base_url_input.clear();
+                        log_debug("Cleared base URL input");
+                    }
+                }
+            }
+
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Collect this character and any pending characters (for paste support)
                 let mut chars = vec![c];
 
@@ -801,7 +748,15 @@ impl EventHandler {
                 }
 
                 if char_count > 1 {
-                    log_debug(&format!("Batched {} characters in URL input", char_count));
+                    log_debug(&format!(
+                        "Batched {} characters for {}",
+                        char_count,
+                        if matches!(s.active_url_field, UrlInputField::SwaggerUrl) {
+                            "Swagger URL"
+                        } else {
+                            "Base URL"
+                        }
+                    ));
                 }
             }
 
@@ -930,12 +885,19 @@ impl EventHandler {
     }
 
     fn handle_auth_dialog(&self, state: Arc<RwLock<AppState>>) {
-        let mut s = state.write().unwrap();
-        s.input_mode = InputMode::EnteringToken;
-
         // Pre-fill with current token if exists
-        s.token_input = s.auth.token.clone().unwrap_or_default();
+        let current_token = {
+            let s = state.read().unwrap();
+            s.auth.token.clone().unwrap_or_default()
+        };
 
+        self.apply_many(
+            state,
+            vec![
+                AppAction::EnterTokenInputMode,
+                AppAction::AppendToTokenInput(current_token),
+            ],
+        );
         log_debug("Entering token input mode");
     }
 
@@ -958,19 +920,14 @@ impl EventHandler {
     }
 
     fn handle_toggle_view(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
-        let mut state = state.write().unwrap();
-
-        // Toggle view mode
-        state.view_mode = match state.view_mode {
-            ViewMode::Flat => ViewMode::Grouped,
-            ViewMode::Grouped => ViewMode::Flat,
-        };
+        self.apply(state.clone(), AppAction::ToggleViewMode);
 
         // Reset selection to top
         self.selected_index = 0;
         list_state.select(Some(0));
 
-        log_debug(&format!("Switched to {:?} mode", state.view_mode));
+        let view_mode = state.read().unwrap().view_mode.clone();
+        log_debug(&format!("Switched to {:?} mode", view_mode));
     }
 
     fn handle_up(&mut self, state: Arc<RwLock<AppState>>, list_state: &mut ListState) {
@@ -1285,16 +1242,6 @@ impl EventHandler {
         }
     }
 
-    fn handle_request_param_cancel(&mut self, state: Arc<RwLock<AppState>>) {
-        let mut s = state.write().unwrap();
-
-        // Just exit edit mode without saving
-        s.request_edit_mode = RequestEditMode::Viewing;
-        s.param_edit_buffer.clear();
-
-        log_debug("Cancelled parameter edit");
-    }
-
     // Add this to EventHandler impl in events.rs
     fn ensure_request_config_for_selected(&self, state: Arc<RwLock<AppState>>) {
         let state_read = state.read().unwrap();
@@ -1312,8 +1259,7 @@ impl EventHandler {
     }
 
     fn handle_search_activate(&self, state: Arc<RwLock<AppState>>) {
-        let mut s = state.write().unwrap();
-        s.input_mode = InputMode::Searching;
+        self.apply(state, AppAction::EnterSearchMode);
         log_debug("Entering search mode");
     }
 
@@ -1391,10 +1337,25 @@ fn can_execute_endpoint(
     endpoint: &ApiEndpoint,
     config: Option<&RequestConfig>,
 ) -> Result<(), String> {
-    // Check if we have a config at all
+    // If endpoint has no path parameters, it can always be executed
+    let path_params = endpoint.path_params();
+    if path_params.is_empty() {
+        return Ok(());
+    }
+
+    // If we have path params, we need a config
     let config = match config {
         Some(c) => c,
-        None => return Err("No request configuration found".to_string()),
+        None => {
+            return Err(format!(
+                "Please configure path parameter(s): {}",
+                path_params
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
     };
 
     // Check if all path params are filled

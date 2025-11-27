@@ -1,3 +1,4 @@
+mod actions;
 mod app;
 mod config;
 mod request;

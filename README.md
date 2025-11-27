@@ -22,10 +22,11 @@ A Ratatui-based terminal UI for testing ASP.NET Core APIs directly from your ter
 ```
 
 2. On first launch, you'll be prompted to configure:
-   - **Swagger URL**: The URL to your OpenAPI/Swagger specification
+   - **Swagger URL**: The URL to your OpenAPI/Swagger specification (for fetching endpoints)
      - Example: `http://localhost:5000/swagger/v1/swagger.json`
-   - **API Base URL**: The base URL for making API requests (auto-detected)
+   - **API Base URL**: The base URL for making API requests (must be entered manually)
      - Example: `http://localhost:5000`
+   - Use `Tab` to switch between fields, `Ctrl+L` to clear the current field
 
 3. Navigate endpoints with arrow keys or `j`/`k`, press `Space` to execute requests
 
@@ -73,7 +74,20 @@ swagger_url = "http://localhost:5000/swagger/v1/swagger.json"
 base_url = "http://localhost:5000"
 ```
 
+**Important**: Both URLs are required and independent:
+- **Swagger URL**: Used to fetch the list of available endpoints from your API documentation
+- **Base URL**: Used as the base for all actual API requests
+
 You can edit this file directly or press `,` in the app to update URLs.
+
+### URL Configuration Modal
+
+When configuring URLs (press `,`):
+- Use `Tab` to switch between Swagger URL and Base URL fields
+- Use `Ctrl+L` to clear the current field
+- Use `Ctrl+U` to clear the entire line
+- Use `Ctrl+W` to delete the previous word
+- Press `Enter` to confirm, `Esc` to cancel
 
 ## User Interface
 
@@ -154,9 +168,11 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 - **Panel Switching**: Press `1` to jump to Endpoints panel, `2` to jump to Details panel. Or use `Tab`/`Shift+Tab` to cycle through.
 - **Search**: Press `/` and start typing to filter endpoints. The filter stays active even after you exit search mode with `Esc`. Clear with `Ctrl+L`.
 - **Parameters**: Navigate to the Request tab to configure path and query parameters before executing endpoints. Press `e` to edit, `Enter` to confirm.
+- **Parameter-less Endpoints**: Endpoints without path parameters can be executed immediately with `Space` - no configuration needed!
 - **Compare Responses**: Switch between Headers and Response tabs to inspect different aspects of the API response.
 - **Paste Support**: When entering tokens, URLs, or parameters, you can paste large amounts of text - the app handles it efficiently.
 - **Grouped Navigation**: In grouped view, press `Space` on a group header to expand/collapse it.
+- **URL Configuration**: The Swagger URL and Base URL are completely independent - set them both correctly for your API.
 - **All Methods**: POST, PUT, and PATCH requests currently send empty JSON body `{}` - body editing coming soon!
 
 ## Building from Source

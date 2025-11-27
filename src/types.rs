@@ -184,7 +184,6 @@ pub enum RenderItem {
 pub enum InputMode {
     Normal,
     EnteringToken,
-    #[allow(dead_code)]
     ConfirmClearToken,
     EnteringUrl,
     Searching,

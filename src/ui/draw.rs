@@ -147,7 +147,11 @@ fn render_loading_spinner(
 
     let loading = Paragraph::new(loading_text)
         .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("[1] Endpoints"),
+        );
 
     frame.render_widget(loading, area);
 }
@@ -166,14 +170,21 @@ fn render_error_message(frame: &mut Frame, area: Rect, error: &str, retry_count:
 
     let error_widget = Paragraph::new(error_msg)
         .style(Style::default().fg(Color::Red))
-        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("[1] Endpoints"),
+        );
 
     frame.render_widget(error_widget, area);
 }
 
 fn render_empty_message(frame: &mut Frame, area: Rect) {
-    let empty = Paragraph::new("No endpoints found\n\nPress [F5] to refresh")
-        .block(Block::default().borders(Borders::ALL).title("[1] Endpoints"));
+    let empty = Paragraph::new("No endpoints found\n\nPress [F5] to refresh").block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("[1] Endpoints"),
+    );
 
     frame.render_widget(empty, area);
 }
@@ -181,7 +192,11 @@ fn render_empty_message(frame: &mut Frame, area: Rect) {
 fn render_no_search_results(frame: &mut Frame, area: Rect) {
     let empty = Paragraph::new("No matching endpoints\n\nPress [Esc] or [Ctrl+L] to clear search")
         .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL).title("[1] Search Results"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("[1] Search Results"),
+        );
 
     frame.render_widget(empty, area);
 }
@@ -219,7 +234,10 @@ fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state:
     let list = List::new(items)
         .block(
             Block::default()
-                .title(format!("[1] Endpoints ({})", state.active_endpoints().len()))
+                .title(format!(
+                    "[1] Endpoints ({})",
+                    state.active_endpoints().len()
+                ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color)),
         )
@@ -1078,7 +1096,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
         .split(inner);
 
     // Description
-    let desc = Paragraph::new("Enter your Swagger/OpenAPI spec URL. The base URL will be auto-detected.\nExample: http://localhost:5000/swagger/v1/swagger.json")
+    let desc = Paragraph::new("Swagger URL: for fetching endpoints  |  Base URL: for making API requests\nUse Tab to switch fields, Ctrl+L to clear")
         .style(Style::default().fg(Color::Gray))
         .wrap(Wrap { trim: true });
     frame.render_widget(desc, chunks[0]);
@@ -1148,9 +1166,11 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(base_input, chunks[5]);
 
     // Help text
-    let help = Paragraph::new("Tab: Switch fields  |  Enter: Confirm  |  Esc: Cancel")
-        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
-        .alignment(Alignment::Center);
+    let help = Paragraph::new(
+        "Tab: Switch fields  |  Ctrl+L: Clear field  |  Enter: Confirm  |  Esc: Cancel",
+    )
+    .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+    .alignment(Alignment::Center);
     frame.render_widget(help, chunks[7]);
 }
 

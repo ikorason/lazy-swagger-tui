@@ -66,12 +66,12 @@ impl Config {
         Ok(())
     }
 
-    /// Set swagger URL, auto-extract base URL, and save
+    /// Set swagger URL and base URL, then save
     pub fn set_swagger_url(&mut self, swagger_url: String, base_url: Option<String>) -> Result<()> {
-        self.server.swagger_url = Some(swagger_url.clone());
+        self.server.swagger_url = Some(swagger_url);
 
-        // Use provided base_url, or extract from swagger_url
-        self.server.base_url = base_url.or_else(|| Some(extract_base_url(&swagger_url)));
+        // Use provided base_url as-is (no auto-extraction)
+        self.server.base_url = base_url;
 
         self.save()?;
         Ok(())
@@ -94,28 +94,6 @@ pub fn validate_url(url: &str) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// Extracts base URL from swagger URL
-/// Example: http://localhost:5000/swagger/v1/swagger.json -> http://localhost:5000
-pub fn extract_base_url(swagger_url: &str) -> String {
-    // Parse the URL
-    if let Ok(parsed) = url::Url::parse(swagger_url) {
-        // Get scheme, host, and port
-        let scheme = parsed.scheme();
-        let host = parsed.host_str().unwrap_or("localhost");
-
-        let base = if let Some(port) = parsed.port() {
-            format!("{}://{}:{}", scheme, host, port)
-        } else {
-            format!("{}://{}", scheme, host)
-        };
-
-        base
-    } else {
-        // Fallback: just return the swagger URL if parsing fails
-        swagger_url.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -157,30 +135,5 @@ mod tests {
             result.unwrap_err(),
             "URL must start with http:// or https://"
         );
-    }
-
-    #[test]
-    fn test_extract_base_url_with_path() {
-        let result = extract_base_url("http://localhost:5000/swagger/v1/swagger.json");
-        assert_eq!(result, "http://localhost:5000");
-    }
-
-    #[test]
-    fn test_extract_base_url_with_custom_port() {
-        let result = extract_base_url("https://api.example.com:8080/api/swagger.json");
-        assert_eq!(result, "https://api.example.com:8080");
-    }
-
-    #[test]
-    fn test_extract_base_url_no_port() {
-        let result = extract_base_url("https://api.example.com/v1/swagger.json");
-        assert_eq!(result, "https://api.example.com");
-    }
-
-    #[test]
-    fn test_extract_base_url_invalid_returns_original() {
-        let invalid = "not-a-valid-url";
-        let result = extract_base_url(invalid);
-        assert_eq!(result, invalid);
     }
 }
