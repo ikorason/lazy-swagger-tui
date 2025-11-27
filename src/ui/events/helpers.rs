@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 /// Check if currently editing a parameter
 pub fn is_editing(state: &Arc<RwLock<AppState>>) -> bool {
     let state_read = state.read().unwrap();
-    matches!(state_read.request_edit_mode, RequestEditMode::Editing(_))
+    matches!(state_read.request.edit_mode, RequestEditMode::Editing(_))
 }
 
 /// Apply an action that might depend on edit mode

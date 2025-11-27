@@ -17,7 +17,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
         let state_read = state.read().unwrap();
 
         // Only enter edit mode if currently in Viewing mode
-        if !matches!(state_read.request_edit_mode, RequestEditMode::Viewing) {
+        if !matches!(state_read.request.edit_mode, RequestEditMode::Viewing) {
             return;
         }
 
@@ -30,7 +30,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
             let query_params: Vec<_> = endpoint.query_params();
 
             let path_param_count = path_params.len();
-            let selected_idx = state_read.selected_param_index;
+            let selected_idx = state_read.ui.selected_param_index;
 
             // Determine if we're editing a path or query param
             let param = if selected_idx < path_param_count {
@@ -49,7 +49,8 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
 
                 // Get current value from the appropriate HashMap
                 let current_value = state_read
-                    .request_configs
+                    .request
+                    .configs
                     .get(&endpoint_path)
                     .and_then(|config| {
                         if param_location == "path" {
@@ -75,13 +76,14 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
         let mut s = state.write().unwrap();
 
         // Ensure config exists
-        s.request_configs
+        s.request
+            .configs
             .entry(endpoint_path)
             .or_insert_with(RequestConfig::default);
 
         // Enter edit mode
-        s.request_edit_mode = RequestEditMode::Editing(param_name.clone());
-        s.param_edit_buffer = current_value;
+        s.request.edit_mode = RequestEditMode::Editing(param_name.clone());
+        s.request.param_edit_buffer = current_value;
 
         log_debug(&format!("Editing parameter: {}", param_name));
     }
@@ -92,9 +94,9 @@ pub fn handle_request_param_confirm(selected_index: usize, state: Arc<RwLock<App
     let state_read = state.read().unwrap();
 
     // Get the param name we're editing
-    if let RequestEditMode::Editing(param_name) = &state_read.request_edit_mode {
+    if let RequestEditMode::Editing(param_name) = &state_read.request.edit_mode {
         let param_name = param_name.clone();
-        let new_value = state_read.param_edit_buffer.clone();
+        let new_value = state_read.request.param_edit_buffer.clone();
 
         // Get currently selected endpoint
         let selected_endpoint = state_read.get_selected_endpoint(selected_index);
@@ -114,7 +116,8 @@ pub fn handle_request_param_confirm(selected_index: usize, state: Arc<RwLock<App
 
             // Update the request config in the correct HashMap
             let config = s
-                .request_configs
+                .request
+                .configs
                 .entry(endpoint_path)
                 .or_insert_with(RequestConfig::default);
 
@@ -131,8 +134,8 @@ pub fn handle_request_param_confirm(selected_index: usize, state: Arc<RwLock<App
             }
 
             // Exit edit mode
-            s.request_edit_mode = RequestEditMode::Viewing;
-            s.param_edit_buffer.clear();
+            s.request.edit_mode = RequestEditMode::Viewing;
+            s.request.param_edit_buffer.clear();
 
             log_debug(&format!(
                 "Confirmed parameter {}: {}",

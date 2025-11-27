@@ -79,7 +79,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
     }
 
     // Get request config for this endpoint
-    let config = state.request_configs.get(&endpoint.path);
+    let config = state.request.configs.get(&endpoint.path);
 
     let total_path_params = path_params.len();
 
@@ -96,12 +96,12 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
         // Display each path parameter
         for (idx, param) in path_params.iter().enumerate() {
             let global_idx = idx; // Path params come first
-            let is_selected = state.selected_param_index == global_idx;
+            let is_selected = state.ui.selected_param_index == global_idx;
 
             let current_value =
-                if let RequestEditMode::Editing(editing_param_name) = &state.request_edit_mode {
+                if let RequestEditMode::Editing(editing_param_name) = &state.request.edit_mode {
                     if editing_param_name == &param.name {
-                        state.param_edit_buffer.as_str()
+                        state.request.param_edit_buffer.as_str()
                     } else {
                         config
                             .and_then(|c| c.path_params.get(&param.name))
@@ -116,7 +116,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
                 };
 
             let is_editing = matches!(
-                &state.request_edit_mode,
+                &state.request.edit_mode,
                 RequestEditMode::Editing(name) if name == &param.name
             );
 
@@ -146,12 +146,12 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
         // Display each query parameter
         for (idx, param) in query_params.iter().enumerate() {
             let global_idx = total_path_params + idx; // Offset by path param count
-            let is_selected = state.selected_param_index == global_idx;
+            let is_selected = state.ui.selected_param_index == global_idx;
 
             let current_value =
-                if let RequestEditMode::Editing(editing_param_name) = &state.request_edit_mode {
+                if let RequestEditMode::Editing(editing_param_name) = &state.request.edit_mode {
                     if editing_param_name == &param.name {
-                        state.param_edit_buffer.as_str()
+                        state.request.param_edit_buffer.as_str()
                     } else {
                         config
                             .and_then(|c| c.query_params.get(&param.name))
@@ -166,7 +166,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
                 };
 
             let is_editing = matches!(
-                &state.request_edit_mode,
+                &state.request.edit_mode,
                 RequestEditMode::Editing(name) if name == &param.name
             );
 
@@ -206,7 +206,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
     // ===== SECTION 4: Help Text =====
     lines.push(Line::from("")); // Empty line
 
-    let help_text = match &state.request_edit_mode {
+    let help_text = match &state.request.edit_mode {
         RequestEditMode::Viewing => "j/k/↑/↓: Navigate  |  e: Edit parameter  |  Space: Execute",
         RequestEditMode::Editing(_) => "Type to edit  |  Enter: Confirm  |  Esc: Cancel",
     };
@@ -224,7 +224,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
 pub fn render_headers_tab(frame: &mut Frame, area: Rect, state: &AppState) {
     let mut lines: Vec<Line> = Vec::new();
 
-    if let Some(ref response) = state.current_response {
+    if let Some(ref response) = state.request.current_response {
         if !response.headers.is_empty() {
             let mut header_vec: Vec<_> = response.headers.iter().collect();
             header_vec.sort_by_key(|(k, _)| k.as_str());
@@ -250,23 +250,28 @@ pub fn render_headers_tab(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let content = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .scroll((state.headers_scroll as u16, 0));
+        .scroll((state.ui.headers_scroll as u16, 0));
 
     frame.render_widget(content, area);
 }
 
 /// Render the Response tab content
-pub fn render_response_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint, state: &AppState) {
+pub fn render_response_tab(
+    frame: &mut Frame,
+    area: Rect,
+    endpoint: &ApiEndpoint,
+    state: &AppState,
+) {
     let mut lines: Vec<Line> = Vec::new();
 
-    let is_executing = state.executing_endpoint.as_ref() == Some(&endpoint.path);
+    let is_executing = state.request.executing_endpoint.as_ref() == Some(&endpoint.path);
 
     if is_executing {
         lines.push(Line::from(vec![Span::styled(
             "⏳ Executing request...",
             Style::default().fg(Color::Cyan),
         )]));
-    } else if let Some(ref response) = state.current_response {
+    } else if let Some(ref response) = state.request.current_response {
         if response.is_error {
             lines.push(Line::from(vec![Span::styled(
                 "❌ Error",
@@ -311,7 +316,7 @@ pub fn render_response_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint
 
     let content = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .scroll((state.response_body_scroll as u16, 0));
+        .scroll((state.ui.response_body_scroll as u16, 0));
 
     frame.render_widget(content, area);
 }

@@ -41,10 +41,8 @@ impl Default for App {
             InputMode::Normal
         };
 
-        let state = AppState {
-            input_mode: initial_input_mode,
-            ..Default::default()
-        };
+        let mut state = AppState::default();
+        state.input.mode = initial_input_mode;
 
         Self {
             state: Arc::new(RwLock::new(state)),
@@ -129,9 +127,9 @@ impl App {
             frame,
             main_chunks[0],
             display_url,
-            &state.loading_state,
-            state.endpoints.len(),
-            &state.auth,
+            &state.data.loading_state,
+            state.data.endpoints.len(),
+            &state.request.auth,
         );
 
         // Render search bar
@@ -139,8 +137,8 @@ impl App {
 
         // Ensure we have a selection if items exist
         if should_select {
-            let has_items = match state.view_mode {
-                crate::types::ViewMode::Flat => !state.endpoints.is_empty(),
+            let has_items = match state.ui.view_mode {
+                crate::types::ViewMode::Flat => !state.data.endpoints.is_empty(),
                 crate::types::ViewMode::Grouped => !state.get_render_items().is_empty(),
             };
 
@@ -167,10 +165,10 @@ impl App {
         );
 
         // Render footer
-        ui::render_footer(frame, main_chunks[3], &state.view_mode);
+        ui::render_footer(frame, main_chunks[3], &state.ui.view_mode);
 
         // Render modals LAST - after everything else
-        match state.input_mode {
+        match state.input.mode {
             InputMode::EnteringUrl => {
                 draw::render_url_input_modal(frame, &state);
             }

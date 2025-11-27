@@ -7,7 +7,7 @@
 
 use super::helpers::{can_execute_endpoint, log_debug};
 use crate::request::execute_request_background;
-use crate::state::{count_visible_items, AppState};
+use crate::state::{AppState, count_visible_items};
 use crate::types::{ApiResponse, RenderItem, ViewMode};
 use ratatui::widgets::ListState;
 use std::sync::{Arc, RwLock};
@@ -22,15 +22,15 @@ pub fn handle_enter(
     let state_read = state.read().unwrap();
 
     // Check what view mode we're in
-    if state_read.view_mode == ViewMode::Flat {
+    if state_read.ui.view_mode == ViewMode::Flat {
         // In flat mode: Execute request
-        if let Some(endpoint) = state_read.endpoints.get(*selected_index) {
+        if let Some(endpoint) = state_read.data.endpoints.get(*selected_index) {
             let endpoint = endpoint.clone();
 
             // Check if we have base_url configured
             if let Some(base_url) = base_url {
                 // Check if this endpoint is already executing
-                if let Some(ref executing) = state_read.executing_endpoint {
+                if let Some(ref executing) = state_read.request.executing_endpoint {
                     if executing == &endpoint.path {
                         log_debug("Request already in progress for this endpoint");
                         return;
@@ -38,14 +38,14 @@ pub fn handle_enter(
                 }
 
                 // Validate that all required path params are filled
-                let config = state_read.request_configs.get(&endpoint.path);
+                let config = state_read.request.configs.get(&endpoint.path);
                 if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
                     log_debug(&format!("Cannot execute: {}", err_msg));
                     drop(state_read);
 
                     // Store error in response so user can see it
                     let mut s = state.write().unwrap();
-                    s.current_response = Some(ApiResponse::error(err_msg));
+                    s.request.current_response = Some(ApiResponse::error(err_msg));
                     return;
                 }
 
@@ -68,11 +68,11 @@ pub fn handle_enter(
                     drop(state_read);
                     let mut state_write = state.write().unwrap();
 
-                    if state_write.expanded_groups.contains(&group_name) {
-                        state_write.expanded_groups.remove(&group_name);
+                    if state_write.ui.expanded_groups.contains(&group_name) {
+                        state_write.ui.expanded_groups.remove(&group_name);
                         log_debug(&format!("Collapsed group: {}", group_name));
                     } else {
-                        state_write.expanded_groups.insert(group_name.clone());
+                        state_write.ui.expanded_groups.insert(group_name.clone());
                         log_debug(&format!("Expanded group: {}", group_name));
                     }
 
@@ -88,7 +88,7 @@ pub fn handle_enter(
                     // Check if we have base_url configured
                     if let Some(base_url) = base_url {
                         // Check if this endpoint is already executing
-                        if let Some(ref executing) = state_read.executing_endpoint {
+                        if let Some(ref executing) = state_read.request.executing_endpoint {
                             if executing == &endpoint.path {
                                 log_debug("Request already in progress for this endpoint");
                                 return;
@@ -96,14 +96,14 @@ pub fn handle_enter(
                         }
 
                         // Validate that all required path params are filled
-                        let config = state_read.request_configs.get(&endpoint.path);
+                        let config = state_read.request.configs.get(&endpoint.path);
                         if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
                             log_debug(&format!("Cannot execute: {}", err_msg));
                             drop(state_read);
 
                             // Store error in response so user can see it
                             let mut s = state.write().unwrap();
-                            s.current_response = Some(ApiResponse::error(err_msg));
+                            s.request.current_response = Some(ApiResponse::error(err_msg));
                             return;
                         }
 
@@ -124,14 +124,14 @@ pub fn handle_enter(
 pub fn handle_retry(state: Arc<RwLock<AppState>>) -> bool {
     let state_read = state.read().unwrap();
     if matches!(
-        state_read.loading_state,
+        state_read.data.loading_state,
         crate::types::LoadingState::Error(_)
     ) {
         drop(state_read);
 
         // Increment retry count
         if let Ok(mut s) = state.write() {
-            s.retry_count += 1;
+            s.data.retry_count += 1;
         }
 
         return true; // Signal that we should fetch

@@ -65,7 +65,7 @@ impl EventHandler {
 
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
-                let input_mode = state.read().unwrap().input_mode.clone();
+                let input_mode = state.read().unwrap().input.mode.clone();
 
                 match input_mode {
                     InputMode::EnteringUrl => {
@@ -81,7 +81,12 @@ impl EventHandler {
                     }
 
                     InputMode::Searching => {
-                        search::handle_search_input(&mut self.selected_index, key, state.clone(), list_state)?;
+                        search::handle_search_input(
+                            &mut self.selected_index,
+                            key,
+                            state.clone(),
+                            list_state,
+                        )?;
                     }
 
                     InputMode::Normal => match key.code {
@@ -89,13 +94,13 @@ impl EventHandler {
                         KeyCode::Char('q') => {
                             // Don't quit if we're editing a parameter
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat 'q' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('q');
+                                s.request.param_edit_buffer.push('q');
                             } else {
                                 // Not editing - quit the app
                                 self.should_quit = true;
@@ -104,26 +109,33 @@ impl EventHandler {
                         // nav down
                         KeyCode::Char('j') => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             // If editing a parameter, treat as character input
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('j');
+                                s.request.param_edit_buffer.push('j');
                             } else {
                                 // Not editing - handle navigation
                                 match panel {
                                     PanelFocus::EndpointsList => {
                                         // Navigate down in endpoints list
-                                        navigation::handle_down(&mut self.selected_index, state.clone(), list_state);
+                                        navigation::handle_down(
+                                            &mut self.selected_index,
+                                            state.clone(),
+                                            list_state,
+                                        );
                                     }
                                     PanelFocus::Details => {
                                         // If on Request tab and in Viewing mode, navigate params
                                         if active_tab == DetailTab::Request {
-                                            navigation::handle_request_param_down(self.selected_index, state.clone());
+                                            navigation::handle_request_param_down(
+                                                self.selected_index,
+                                                state.clone(),
+                                            );
                                         }
                                         // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
                                     }
@@ -133,21 +145,25 @@ impl EventHandler {
                         // nav up
                         KeyCode::Char('k') => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             // If editing a parameter, treat as character input
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('k');
+                                s.request.param_edit_buffer.push('k');
                             } else {
                                 // Not editing - handle navigation
                                 match panel {
                                     PanelFocus::EndpointsList => {
                                         // Navigate up in endpoints list
-                                        navigation::handle_up(&mut self.selected_index, state.clone(), list_state);
+                                        navigation::handle_up(
+                                            &mut self.selected_index,
+                                            state.clone(),
+                                            list_state,
+                                        );
                                     }
                                     PanelFocus::Details => {
                                         // If on Request tab and in Viewing mode, navigate params
@@ -162,13 +178,13 @@ impl EventHandler {
                         // handle auth dialog
                         KeyCode::Char('a') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat 'a' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('a');
+                                s.request.param_edit_buffer.push('a');
                             } else {
                                 // Not editing - auth dialog
                                 modals::handle_auth_dialog(state.clone());
@@ -177,47 +193,54 @@ impl EventHandler {
                         // edit param
                         KeyCode::Char('e') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat 'e' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('e');
+                                s.request.param_edit_buffer.push('e');
                             } else {
                                 // Only handle if on Details panel and Request tab
                                 if panel == PanelFocus::Details && active_tab == DetailTab::Request
                                 {
-                                    parameters::handle_request_param_edit(self.selected_index, state.clone());
+                                    parameters::handle_request_param_edit(
+                                        self.selected_index,
+                                        state.clone(),
+                                    );
                                 }
                             }
                         }
                         // toggle view - list <-> grouped
                         KeyCode::Char('g') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat 'g' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('g');
+                                s.request.param_edit_buffer.push('g');
                             } else {
-                                navigation::handle_toggle_view(&mut self.selected_index, state.clone(), list_state);
+                                navigation::handle_toggle_view(
+                                    &mut self.selected_index,
+                                    state.clone(),
+                                    list_state,
+                                );
                             }
                         }
                         // config url
                         KeyCode::Char(',') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat ',' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push(',');
+                                s.request.param_edit_buffer.push(',');
                             } else {
                                 modals::handle_url_dialog(
                                     state.clone(),
@@ -229,13 +252,13 @@ impl EventHandler {
                         // search endpoints
                         KeyCode::Char('/') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat '/' as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push('/');
+                                s.request.param_edit_buffer.push('/');
                             } else {
                                 search::handle_search_activate(state.clone());
                             }
@@ -273,7 +296,11 @@ impl EventHandler {
                                 .modifiers
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
-                            search::handle_search_clear(&mut self.selected_index, state.clone(), list_state);
+                            search::handle_search_clear(
+                                &mut self.selected_index,
+                                state.clone(),
+                                list_state,
+                            );
                         }
 
                         // -- with modifiers
@@ -284,7 +311,7 @@ impl EventHandler {
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
+                            let panel = state_read.ui.panel_focus.clone();
                             drop(state_read);
 
                             if panel == PanelFocus::Details {
@@ -298,7 +325,7 @@ impl EventHandler {
                                 .contains(crossterm::event::KeyModifiers::CONTROL) =>
                         {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
+                            let panel = state_read.ui.panel_focus.clone();
                             drop(state_read);
 
                             if panel == PanelFocus::Details {
@@ -318,14 +345,14 @@ impl EventHandler {
                         // space  - execute & expand
                         KeyCode::Char(' ') => {
                             let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request_edit_mode.clone();
-                            let panel = state_read.panel_focus.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
                             drop(state_read);
 
                             if matches!(edit_mode, RequestEditMode::Editing(_)) {
                                 // We're editing - treat space as character input
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push(' ');
+                                s.request.param_edit_buffer.push(' ');
                             } else {
                                 match panel {
                                     PanelFocus::EndpointsList => {
@@ -352,9 +379,9 @@ impl EventHandler {
                         // enter - param confirm
                         KeyCode::Enter => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
@@ -364,15 +391,18 @@ impl EventHandler {
                                 && active_tab == DetailTab::Request
                                 && matches!(edit_mode, RequestEditMode::Editing(_))
                             {
-                                parameters::handle_request_param_confirm(self.selected_index, state.clone());
+                                parameters::handle_request_param_confirm(
+                                    self.selected_index,
+                                    state.clone(),
+                                );
                             }
                         }
                         // backspace - param edit
                         KeyCode::Backspace => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
@@ -388,9 +418,9 @@ impl EventHandler {
                         // esc - cancel param edit
                         KeyCode::Esc => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
@@ -407,9 +437,9 @@ impl EventHandler {
                         // keep arrow keys for accessibility (optional)
                         KeyCode::Up => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             // Don't handle navigation during parameter editing
@@ -419,7 +449,11 @@ impl EventHandler {
                                 use crate::types::PanelFocus;
                                 match panel {
                                     PanelFocus::EndpointsList => {
-                                        navigation::handle_up(&mut self.selected_index, state.clone(), list_state);
+                                        navigation::handle_up(
+                                            &mut self.selected_index,
+                                            state.clone(),
+                                            list_state,
+                                        );
                                     }
                                     PanelFocus::Details => {
                                         if active_tab == DetailTab::Request {
@@ -432,9 +466,9 @@ impl EventHandler {
 
                         KeyCode::Down => {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             // Don't handle navigation during parameter editing
@@ -444,11 +478,18 @@ impl EventHandler {
                                 use crate::types::PanelFocus;
                                 match panel {
                                     PanelFocus::EndpointsList => {
-                                        navigation::handle_down(&mut self.selected_index, state.clone(), list_state);
+                                        navigation::handle_down(
+                                            &mut self.selected_index,
+                                            state.clone(),
+                                            list_state,
+                                        );
                                     }
                                     PanelFocus::Details => {
                                         if active_tab == DetailTab::Request {
-                                            navigation::handle_request_param_down(self.selected_index, state.clone());
+                                            navigation::handle_request_param_down(
+                                                self.selected_index,
+                                                state.clone(),
+                                            );
                                         }
                                     }
                                 }
@@ -459,9 +500,9 @@ impl EventHandler {
                             if !key.modifiers.contains(KeyModifiers::CONTROL) && c != ' ' =>
                         {
                             let state_read = state.read().unwrap();
-                            let panel = state_read.panel_focus.clone();
-                            let active_tab = state_read.active_detail_tab.clone();
-                            let edit_mode = state_read.request_edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            let edit_mode = state_read.request.edit_mode.clone();
                             drop(state_read);
 
                             use crate::types::PanelFocus;
@@ -471,10 +512,10 @@ impl EventHandler {
                                 && matches!(edit_mode, RequestEditMode::Editing(_))
                             {
                                 let mut s = state.write().unwrap();
-                                s.param_edit_buffer.push(c);
+                                s.request.param_edit_buffer.push(c);
                                 log_debug(&format!(
                                     "Added char, buffer now: {}",
-                                    s.param_edit_buffer
+                                    s.request.param_edit_buffer
                                 ));
                             } else {
                                 log_debug("Conditions not met for character input");

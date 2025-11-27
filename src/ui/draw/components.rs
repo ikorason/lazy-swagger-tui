@@ -29,16 +29,13 @@ pub fn render_header(
         LoadingState::Idle => "Idle".to_string(),
         LoadingState::Fetching => "Fetching...".to_string(),
         LoadingState::Parsing => "Parsing...".to_string(),
-        LoadingState::Complete => format!("{} endpoints loaded", endpoints_count),
+        LoadingState::Complete => format!("{endpoints_count} endpoints loaded"),
         LoadingState::Error(_) => "Error".to_string(),
     };
 
     let auth_status = get_auth_status_text(auth_state);
 
-    let header_text = format!(
-        "lazy swagger tui - {} [{}] | {}",
-        swagger_url, status_text, auth_status
-    );
+    let header_text = format!("lazy swagger tui - {swagger_url} [{status_text}] | {auth_status}",);
 
     let header = Paragraph::new(header_text)
         .style(Style::default().fg(Color::Cyan))
@@ -49,21 +46,21 @@ pub fn render_header(
 
 /// Render the search bar with active filter indication
 pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
-    let is_active = matches!(state.input_mode, InputMode::Searching);
+    let is_active = matches!(state.input.mode, InputMode::Searching);
 
     let border_style = if is_active {
         Style::default().fg(Color::Cyan)
-    } else if !state.search_query.is_empty() {
+    } else if !state.search.query.is_empty() {
         Style::default().fg(Color::Green) // Show filter is active
     } else {
         Style::default().fg(Color::DarkGray)
     };
 
     // Show match count if filtering
-    let title = if !state.search_query.is_empty() {
-        let count = state.filtered_endpoints.len();
-        let total = state.endpoints.len();
-        format!(" Search [{}/{}] ", count, total)
+    let title = if !state.search.query.is_empty() {
+        let count = state.search.filtered_endpoints.len();
+        let total = state.data.endpoints.len();
+        format!(" Search [{count}/{total}] ")
     } else {
         " Search (/) ".to_string()
     };
@@ -74,9 +71,9 @@ pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
         .title(title);
 
     let search_text = if is_active {
-        format!("{}_", state.search_query) // Show cursor
+        format!("{}_", state.search.query) // Show cursor
     } else {
-        state.search_query.clone()
+        state.search.query.clone()
     };
 
     let paragraph = Paragraph::new(search_text).block(block);
@@ -135,15 +132,12 @@ pub fn render_loading_spinner(
 /// Render error message with retry instructions
 pub fn render_error_message(frame: &mut Frame, area: Rect, error: &str, retry_count: u32) {
     let retry_text = if retry_count > 0 {
-        format!("\n\nRetry attempt: {}", retry_count)
+        format!("\n\nRetry attempt: {retry_count}")
     } else {
         String::new()
     };
 
-    let error_msg = format!(
-        "❌ {}{}\n\nPress [R] to retry\nPress [F5] to refresh",
-        error, retry_text
-    );
+    let error_msg = format!("❌ {error}{retry_text}\n\nPress [R] to retry\nPress [F5] to refresh",);
 
     let error_widget = Paragraph::new(error_msg)
         .style(Style::default().fg(Color::Red))
@@ -184,7 +178,7 @@ pub fn render_no_search_results(frame: &mut Frame, area: Rect) {
 fn get_auth_status_text(auth: &AuthState) -> String {
     if auth.is_authenticated() {
         let display = auth.get_masked_display();
-        format!("🔒 {} | 'a':edit 'A':clear", display)
+        format!("🔒 {display} | 'a':edit 'A':clear")
     } else {
         "🔓 Not authenticated | 'a':set token".to_string()
     }

@@ -15,11 +15,3 @@ pub fn get_method_color(method: &str) -> Color {
         _ => Color::White,
     }
 }
-
-/// Method column width for consistent formatting
-#[allow(dead_code)]
-pub const METHOD_COLUMN_WIDTH: usize = 7;
-
-/// Scroll lines per action (Ctrl+U / Ctrl+D)
-#[allow(dead_code)]
-pub const SCROLL_LINES_PER_ACTION: usize = 5;

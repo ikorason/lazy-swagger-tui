@@ -5,11 +5,12 @@
 //! - Details panel (right side) - tabs with endpoint details
 
 use super::components::{
-    render_empty_message, render_error_message, render_loading_spinner,
-    render_no_search_results,
+    render_empty_message, render_error_message, render_loading_spinner, render_no_search_results,
 };
 use super::styling::get_method_color;
-use super::tabs::{render_endpoint_tab, render_headers_tab, render_request_tab, render_response_tab};
+use super::tabs::{
+    render_endpoint_tab, render_headers_tab, render_request_tab, render_response_tab,
+};
 use crate::state::AppState;
 use crate::types::{DetailTab, LoadingState, PanelFocus, RenderItem, ViewMode};
 use ratatui::{
@@ -28,16 +29,16 @@ pub fn render_endpoints_panel(
     spinner_index: usize,
     list_state: &mut ListState,
 ) {
-    match &state.loading_state {
+    match &state.data.loading_state {
         LoadingState::Fetching | LoadingState::Parsing => {
-            render_loading_spinner(frame, area, &state.loading_state, spinner_index);
+            render_loading_spinner(frame, area, &state.data.loading_state, spinner_index);
         }
         LoadingState::Error(error) => {
-            render_error_message(frame, area, error, state.retry_count);
+            render_error_message(frame, area, error, state.data.retry_count);
         }
         LoadingState::Complete | LoadingState::Idle => {
             if state.active_endpoints().is_empty() {
-                if !state.search_query.is_empty() {
+                if !state.search.query.is_empty() {
                     // Searching but no results
                     render_no_search_results(frame, area);
                 } else {
@@ -45,7 +46,7 @@ pub fn render_endpoints_panel(
                     render_empty_message(frame, area);
                 }
             } else {
-                match &state.view_mode {
+                match &state.ui.view_mode {
                     ViewMode::Flat => {
                         render_flat_list(frame, area, state, list_state);
                     }
@@ -69,7 +70,7 @@ pub fn render_details_panel(
     let selected_endpoint = state.get_selected_endpoint(selected_index);
 
     // Determine border color based on panel focus
-    let border_color = if state.panel_focus == PanelFocus::Details {
+    let border_color = if state.ui.panel_focus == PanelFocus::Details {
         Color::Cyan
     } else {
         Color::White
@@ -85,7 +86,7 @@ pub fn render_details_panel(
     frame.render_widget(block, area);
 
     // Handle loading/error states
-    match &state.loading_state {
+    match &state.data.loading_state {
         LoadingState::Fetching | LoadingState::Parsing => {
             let loading =
                 Paragraph::new("Loading endpoints...").style(Style::default().fg(Color::Yellow));
@@ -115,7 +116,7 @@ pub fn render_details_panel(
 
     // Render active tab content
     if let Some(endpoint) = selected_endpoint {
-        match state.active_detail_tab {
+        match state.ui.active_detail_tab {
             DetailTab::Endpoint => render_endpoint_tab(frame, chunks[1], &endpoint),
             DetailTab::Request => render_request_tab(frame, chunks[1], &endpoint, state),
             DetailTab::Headers => render_headers_tab(frame, chunks[1], state),
@@ -157,7 +158,7 @@ fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state:
         .collect();
 
     // Determine border color based on panel focus
-    let border_color = if state.panel_focus == PanelFocus::EndpointsList {
+    let border_color = if state.ui.panel_focus == PanelFocus::EndpointsList {
         Color::Cyan
     } else {
         Color::White
@@ -230,7 +231,7 @@ fn render_grouped_list(
     }
 
     // Determine border color based on panel focus
-    let border_color = if state.panel_focus == PanelFocus::EndpointsList {
+    let border_color = if state.ui.panel_focus == PanelFocus::EndpointsList {
         Color::Cyan
     } else {
         Color::White
@@ -258,10 +259,10 @@ fn render_grouped_list(
 
 /// Render the tab bar showing [ Endpoint ] [ Request ] [ Headers ] [ Response ]
 fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
-    let active_tab = &state.active_detail_tab;
+    let active_tab = &state.ui.active_detail_tab;
 
     // Check if request is executing
-    let is_executing = state.executing_endpoint.is_some();
+    let is_executing = state.request.executing_endpoint.is_some();
 
     // Build tab labels with highlighting
     let endpoint_style = if *active_tab == DetailTab::Endpoint {

@@ -24,7 +24,7 @@ pub fn handle_up(
 
         // Reset parameter selection when changing endpoints
         let mut s = state.write().unwrap();
-        s.selected_param_index = 0;
+        s.ui.selected_param_index = 0;
         drop(s);
 
         ensure_request_config_for_selected(*selected_index, state);
@@ -39,8 +39,8 @@ pub fn handle_down(
 ) {
     let state_guard = state.read().unwrap();
 
-    let max_index = match state_guard.view_mode {
-        ViewMode::Flat => state_guard.endpoints.len().saturating_sub(1),
+    let max_index = match state_guard.ui.view_mode {
+        ViewMode::Flat => state_guard.data.endpoints.len().saturating_sub(1),
         ViewMode::Grouped => state_guard.get_render_items().len().saturating_sub(1),
     };
     drop(state_guard);
@@ -51,7 +51,7 @@ pub fn handle_down(
 
         // Reset parameter selection when changing endpoints
         let mut s = state.write().unwrap();
-        s.selected_param_index = 0;
+        s.ui.selected_param_index = 0;
         drop(s);
 
         ensure_request_config_for_selected(*selected_index, state);
@@ -63,9 +63,9 @@ pub fn handle_request_param_up(state: Arc<RwLock<AppState>>) {
     let mut s = state.write().unwrap();
 
     // Only navigate if in Viewing mode
-    if matches!(s.request_edit_mode, RequestEditMode::Viewing) {
-        if s.selected_param_index > 0 {
-            s.selected_param_index -= 1;
+    if matches!(s.request.edit_mode, RequestEditMode::Viewing) {
+        if s.ui.selected_param_index > 0 {
+            s.ui.selected_param_index -= 1;
         }
     }
 }
@@ -75,7 +75,7 @@ pub fn handle_request_param_down(selected_index: usize, state: Arc<RwLock<AppSta
     let state_read = state.read().unwrap();
 
     // Only navigate if in Viewing mode
-    if !matches!(state_read.request_edit_mode, RequestEditMode::Viewing) {
+    if !matches!(state_read.request.edit_mode, RequestEditMode::Viewing) {
         return;
     }
 
@@ -90,8 +90,8 @@ pub fn handle_request_param_down(selected_index: usize, state: Arc<RwLock<AppSta
         drop(state_read);
         let mut s = state.write().unwrap();
 
-        if s.selected_param_index < total_param_count.saturating_sub(1) {
-            s.selected_param_index += 1;
+        if s.ui.selected_param_index < total_param_count.saturating_sub(1) {
+            s.ui.selected_param_index += 1;
         }
     }
 }
@@ -108,7 +108,7 @@ pub fn handle_toggle_view(
     *selected_index = 0;
     list_state.select(Some(0));
 
-    let view_mode = state.read().unwrap().view_mode.clone();
+    let view_mode = state.read().unwrap().ui.view_mode.clone();
     log_debug(&format!("Switched to {:?} mode", view_mode));
 }
 

@@ -62,7 +62,7 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(label, chunks[0]);
 
     // Input field - show full token while editing
-    let input = Paragraph::new(state.token_input.clone()).style(
+    let input = Paragraph::new(state.input.token_input.clone()).style(
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -184,8 +184,8 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(desc, chunks[0]);
 
     // Determine active field styles
-    let swagger_active = state.active_url_field == UrlInputField::SwaggerUrl;
-    let base_active = state.active_url_field == UrlInputField::BaseUrl;
+    let swagger_active = state.input.active_url_field == UrlInputField::SwaggerUrl;
+    let base_active = state.input.active_url_field == UrlInputField::BaseUrl;
 
     // Swagger URL label (with indicator if active)
     let swagger_label_text = if swagger_active {
@@ -202,7 +202,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(swagger_label, chunks[1]);
 
     // Swagger URL input (highlighted if active)
-    let swagger_input = Paragraph::new(state.url_input.clone()).style(
+    let swagger_input = Paragraph::new(state.input.url_input.clone()).style(
         Style::default()
             .fg(if swagger_active {
                 Color::Yellow
@@ -231,7 +231,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(base_label, chunks[4]);
 
     // Base URL input (highlighted if active)
-    let base_input = Paragraph::new(state.base_url_input.clone()).style(
+    let base_input = Paragraph::new(state.input.base_url_input.clone()).style(
         Style::default()
             .fg(if base_active {
                 Color::Yellow

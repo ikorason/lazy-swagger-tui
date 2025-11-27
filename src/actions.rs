@@ -96,73 +96,73 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             // This is handled in events.rs with list_state - not pure state
         }
         AppAction::NavigateToPanel(panel) => {
-            state.panel_focus = panel;
+            state.ui.panel_focus = panel;
         }
         AppAction::NavigateToTab(tab) => {
-            state.active_detail_tab = tab;
+            state.ui.active_detail_tab = tab;
         }
         AppAction::NavigateTabForward => {
             use DetailTab::*;
-            match (&state.panel_focus, &state.active_detail_tab) {
+            match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
-                    state.panel_focus = PanelFocus::Details;
-                    state.active_detail_tab = Endpoint;
-                    state.selected_param_index = 0;
+                    state.ui.panel_focus = PanelFocus::Details;
+                    state.ui.active_detail_tab = Endpoint;
+                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Endpoint) => {
-                    state.active_detail_tab = Request;
-                    state.selected_param_index = 0;
+                    state.ui.active_detail_tab = Request;
+                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Request) => {
-                    state.active_detail_tab = Headers;
+                    state.ui.active_detail_tab = Headers;
                 }
                 (PanelFocus::Details, Headers) => {
-                    state.active_detail_tab = Response;
+                    state.ui.active_detail_tab = Response;
                 }
                 (PanelFocus::Details, Response) => {
-                    state.panel_focus = PanelFocus::EndpointsList;
-                    state.active_detail_tab = Endpoint;
+                    state.ui.panel_focus = PanelFocus::EndpointsList;
+                    state.ui.active_detail_tab = Endpoint;
                 }
             }
         }
         AppAction::NavigateTabBackward => {
             use DetailTab::*;
-            match (&state.panel_focus, &state.active_detail_tab) {
+            match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
-                    state.panel_focus = PanelFocus::Details;
-                    state.active_detail_tab = Response;
+                    state.ui.panel_focus = PanelFocus::Details;
+                    state.ui.active_detail_tab = Response;
                 }
                 (PanelFocus::Details, Request) => {
-                    state.active_detail_tab = Endpoint;
-                    state.selected_param_index = 0;
+                    state.ui.active_detail_tab = Endpoint;
+                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Response) => {
-                    state.active_detail_tab = Headers;
+                    state.ui.active_detail_tab = Headers;
                 }
                 (PanelFocus::Details, Headers) => {
-                    state.active_detail_tab = Request;
-                    state.selected_param_index = 0;
+                    state.ui.active_detail_tab = Request;
+                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Endpoint) => {
-                    state.panel_focus = PanelFocus::EndpointsList;
+                    state.ui.panel_focus = PanelFocus::EndpointsList;
                 }
             }
         }
         AppAction::NavigateParamUp => {
-            state.selected_param_index = state.selected_param_index.saturating_sub(1);
+            state.ui.selected_param_index = state.ui.selected_param_index.saturating_sub(1);
         }
         AppAction::NavigateParamDown => {
-            state.selected_param_index = state.selected_param_index.saturating_add(1);
+            state.ui.selected_param_index = state.ui.selected_param_index.saturating_add(1);
         }
 
         // Scrolling
         AppAction::ScrollUp => {
-            match state.active_detail_tab {
+            match state.ui.active_detail_tab {
                 DetailTab::Response => {
-                    state.response_body_scroll = state.response_body_scroll.saturating_sub(5);
+                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_sub(5);
                 }
                 DetailTab::Headers => {
-                    state.headers_scroll = state.headers_scroll.saturating_sub(5);
+                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_sub(5);
                 }
                 DetailTab::Endpoint | DetailTab::Request => {
                     // No scrolling for these tabs
@@ -170,12 +170,12 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             }
         }
         AppAction::ScrollDown => {
-            match state.active_detail_tab {
+            match state.ui.active_detail_tab {
                 DetailTab::Response => {
-                    state.response_body_scroll = state.response_body_scroll.saturating_add(5);
+                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_add(5);
                 }
                 DetailTab::Headers => {
-                    state.headers_scroll = state.headers_scroll.saturating_add(5);
+                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_add(5);
                 }
                 DetailTab::Endpoint | DetailTab::Request => {
                     // No scrolling for these tabs
@@ -186,16 +186,16 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         // View mode
         AppAction::ToggleViewMode => {
             use crate::types::ViewMode;
-            state.view_mode = match state.view_mode {
+            state.ui.view_mode = match state.ui.view_mode {
                 ViewMode::Flat => ViewMode::Grouped,
                 ViewMode::Grouped => ViewMode::Flat,
             };
         }
         AppAction::ToggleGroupExpanded(group_name) => {
-            if state.expanded_groups.contains(&group_name) {
-                state.expanded_groups.remove(&group_name);
+            if state.ui.expanded_groups.contains(&group_name) {
+                state.ui.expanded_groups.remove(&group_name);
             } else {
-                state.expanded_groups.insert(group_name);
+                state.ui.expanded_groups.insert(group_name);
             }
         }
 
@@ -204,86 +204,86 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             swagger_url,
             base_url,
         } => {
-            state.input_mode = InputMode::EnteringUrl;
-            state.url_input = swagger_url.unwrap_or_default();
-            state.base_url_input = base_url.unwrap_or_default();
-            state.active_url_field = UrlInputField::SwaggerUrl;
+            state.input.mode = InputMode::EnteringUrl;
+            state.input.url_input = swagger_url.unwrap_or_default();
+            state.input.base_url_input = base_url.unwrap_or_default();
+            state.input.active_url_field = UrlInputField::SwaggerUrl;
         }
         AppAction::ExitUrlInputMode => {
-            state.input_mode = InputMode::Normal;
-            state.url_input.clear();
-            state.base_url_input.clear();
+            state.input.mode = InputMode::Normal;
+            state.input.url_input.clear();
+            state.input.base_url_input.clear();
         }
         AppAction::EnterTokenInputMode => {
-            state.input_mode = InputMode::EnteringToken;
-            state.token_input.clear();
+            state.input.mode = InputMode::EnteringToken;
+            state.input.token_input.clear();
         }
         AppAction::ExitTokenInputMode => {
-            state.input_mode = InputMode::Normal;
-            state.token_input.clear();
+            state.input.mode = InputMode::Normal;
+            state.input.token_input.clear();
         }
         AppAction::EnterSearchMode => {
-            state.input_mode = InputMode::Searching;
-            state.search_query.clear();
+            state.input.mode = InputMode::Searching;
+            state.search.query.clear();
         }
         AppAction::ExitSearchMode => {
-            state.input_mode = InputMode::Normal;
+            state.input.mode = InputMode::Normal;
         }
         AppAction::EnterConfirmClearTokenMode => {
-            state.input_mode = InputMode::ConfirmClearToken;
+            state.input.mode = InputMode::ConfirmClearToken;
         }
         AppAction::ExitConfirmClearTokenMode => {
-            state.input_mode = InputMode::Normal;
+            state.input.mode = InputMode::Normal;
         }
         AppAction::SetActiveUrlField(field) => {
-            state.active_url_field = field;
+            state.input.active_url_field = field;
         }
 
         // Text input for modals
         AppAction::AppendToUrlInput(text) => {
-            state.url_input.push_str(&text);
+            state.input.url_input.push_str(&text);
         }
         AppAction::AppendToBaseUrlInput(text) => {
-            state.base_url_input.push_str(&text);
+            state.input.base_url_input.push_str(&text);
         }
         AppAction::AppendToTokenInput(text) => {
-            state.token_input.push_str(&text);
+            state.input.token_input.push_str(&text);
         }
         AppAction::AppendToSearchQuery(text) => {
-            state.search_query.push_str(&text);
+            state.search.query.push_str(&text);
         }
         AppAction::ClearUrlInput => {
-            state.url_input.clear();
+            state.input.url_input.clear();
         }
         AppAction::ClearBaseUrlInput => {
-            state.base_url_input.clear();
+            state.input.base_url_input.clear();
         }
         AppAction::ClearTokenInput => {
-            state.token_input.clear();
+            state.input.token_input.clear();
         }
         AppAction::ClearSearchQuery => {
-            state.search_query.clear();
+            state.search.query.clear();
         }
         AppAction::BackspaceUrlInput => {
-            state.url_input.pop();
+            state.input.url_input.pop();
         }
         AppAction::BackspaceBaseUrlInput => {
-            state.base_url_input.pop();
+            state.input.base_url_input.pop();
         }
         AppAction::BackspaceTokenInput => {
-            state.token_input.pop();
+            state.input.token_input.pop();
         }
         AppAction::BackspaceSearchQuery => {
-            state.search_query.pop();
+            state.search.query.pop();
         }
         AppAction::DeleteWordUrlInput => {
-            delete_word(&mut state.url_input);
+            delete_word(&mut state.input.url_input);
         }
         AppAction::DeleteWordBaseUrlInput => {
-            delete_word(&mut state.base_url_input);
+            delete_word(&mut state.input.base_url_input);
         }
         AppAction::DeleteWordTokenInput => {
-            delete_word(&mut state.token_input);
+            delete_word(&mut state.input.token_input);
         }
 
         // Parameter editing
@@ -291,33 +291,33 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             param_name,
             endpoint_path,
         } => {
-            state.request_edit_mode = RequestEditMode::Editing(param_name.clone());
+            state.request.edit_mode = RequestEditMode::Editing(param_name.clone());
             // Initialize buffer with current value if it exists
-            if let Some(config) = state.request_configs.get(&endpoint_path) {
+            if let Some(config) = state.request.configs.get(&endpoint_path) {
                 if let Some(value) = config.path_params.get(&param_name) {
-                    state.param_edit_buffer = value.clone();
+                    state.request.param_edit_buffer = value.clone();
                 } else if let Some(value) = config.query_params.get(&param_name) {
-                    state.param_edit_buffer = value.clone();
+                    state.request.param_edit_buffer = value.clone();
                 } else {
-                    state.param_edit_buffer.clear();
+                    state.request.param_edit_buffer.clear();
                 }
             } else {
-                state.param_edit_buffer.clear();
+                state.request.param_edit_buffer.clear();
             }
         }
         AppAction::AppendToParamBuffer(text) => {
-            state.param_edit_buffer.push_str(&text);
+            state.request.param_edit_buffer.push_str(&text);
         }
         AppAction::BackspaceParamBuffer => {
-            state.param_edit_buffer.pop();
+            state.request.param_edit_buffer.pop();
         }
         AppAction::ClearParamBuffer => {
-            state.param_edit_buffer.clear();
+            state.request.param_edit_buffer.clear();
         }
         AppAction::ConfirmParameterEdit { endpoint_path } => {
-            if let RequestEditMode::Editing(param_name) = &state.request_edit_mode {
+            if let RequestEditMode::Editing(param_name) = &state.request.edit_mode {
                 // Clone values we need before borrowing mutably
-                let buffer_value = state.param_edit_buffer.clone();
+                let buffer_value = state.request.param_edit_buffer.clone();
                 let param_name = param_name.clone();
 
                 // Determine if this is a path or query param
@@ -340,39 +340,39 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                     config.query_params.insert(param_name, buffer_value);
                 }
             }
-            state.request_edit_mode = RequestEditMode::Viewing;
-            state.param_edit_buffer.clear();
+            state.request.edit_mode = RequestEditMode::Viewing;
+            state.request.param_edit_buffer.clear();
         }
         AppAction::CancelParameterEdit => {
-            state.request_edit_mode = RequestEditMode::Viewing;
-            state.param_edit_buffer.clear();
+            state.request.edit_mode = RequestEditMode::Viewing;
+            state.request.param_edit_buffer.clear();
         }
 
         // Authentication
         AppAction::SetAuthToken(token) => {
-            state.auth.set_token(token);
+            state.request.auth.set_token(token);
         }
         AppAction::ClearAuthToken => {
-            state.auth.clear_token();
+            state.request.auth.clear_token();
         }
 
         // Response
         AppAction::SetErrorResponse(error_msg) => {
-            state.current_response = Some(crate::types::ApiResponse::error(error_msg));
+            state.request.current_response = Some(crate::types::ApiResponse::error(error_msg));
         }
         AppAction::ClearResponse => {
-            state.current_response = None;
+            state.request.current_response = None;
         }
 
         // State resets
         AppAction::ResetParamIndex => {
-            state.selected_param_index = 0;
+            state.ui.selected_param_index = 0;
         }
         AppAction::ResetResponseScroll => {
-            state.response_body_scroll = 0;
+            state.ui.response_body_scroll = 0;
         }
         AppAction::ResetHeadersScroll => {
-            state.headers_scroll = 0;
+            state.ui.headers_scroll = 0;
         }
     }
 }
@@ -398,128 +398,140 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     fn create_test_state() -> AppState {
+        use crate::state::{DataState, InputState, RequestState, SearchState, UiState};
+
         AppState {
-            endpoints: vec![],
-            grouped_endpoints: HashMap::new(),
-            loading_state: LoadingState::Idle,
-            retry_count: 0,
-            view_mode: ViewMode::Flat,
-            expanded_groups: HashSet::new(),
-            panel_focus: PanelFocus::EndpointsList,
-            active_detail_tab: DetailTab::Endpoint,
-            selected_param_index: 0,
-            input_mode: InputMode::Normal,
-            url_input: String::new(),
-            base_url_input: String::new(),
-            active_url_field: UrlInputField::SwaggerUrl,
-            token_input: String::new(),
-            auth: AuthState::new(),
-            executing_endpoint: None,
-            current_response: None,
-            request_edit_mode: RequestEditMode::Viewing,
-            param_edit_buffer: String::new(),
-            request_configs: HashMap::new(),
-            response_body_scroll: 0,
-            headers_scroll: 0,
-            search_query: String::new(),
-            filtered_endpoints: Vec::new(),
-            filtered_grouped_endpoints: HashMap::new(),
+            data: DataState {
+                endpoints: vec![],
+                grouped_endpoints: HashMap::new(),
+                loading_state: LoadingState::Idle,
+                retry_count: 0,
+            },
+            ui: UiState {
+                view_mode: ViewMode::Flat,
+                expanded_groups: HashSet::new(),
+                panel_focus: PanelFocus::EndpointsList,
+                active_detail_tab: DetailTab::Endpoint,
+                response_body_scroll: 0,
+                headers_scroll: 0,
+                selected_param_index: 0,
+            },
+            input: InputState {
+                mode: InputMode::Normal,
+                token_input: String::new(),
+                url_input: String::new(),
+                base_url_input: String::new(),
+                active_url_field: UrlInputField::SwaggerUrl,
+            },
+            request: RequestState {
+                auth: AuthState::new(),
+                executing_endpoint: None,
+                current_response: None,
+                configs: HashMap::new(),
+                edit_mode: RequestEditMode::Viewing,
+                param_edit_buffer: String::new(),
+            },
+            search: SearchState {
+                query: String::new(),
+                filtered_endpoints: Vec::new(),
+                filtered_grouped_endpoints: HashMap::new(),
+            },
         }
     }
 
     #[test]
     fn test_navigate_to_panel() {
         let mut state = create_test_state();
-        assert_eq!(state.panel_focus, PanelFocus::EndpointsList);
+        assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
 
         apply_action(AppAction::NavigateToPanel(PanelFocus::Details), &mut state);
-        assert_eq!(state.panel_focus, PanelFocus::Details);
+        assert_eq!(state.ui.panel_focus, PanelFocus::Details);
     }
 
     #[test]
     fn test_navigate_tab_forward() {
         let mut state = create_test_state();
-        state.panel_focus = PanelFocus::Details;
-        state.active_detail_tab = DetailTab::Endpoint;
+        state.ui.panel_focus = PanelFocus::Details;
+        state.ui.active_detail_tab = DetailTab::Endpoint;
 
         apply_action(AppAction::NavigateTabForward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Request);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Request);
 
         apply_action(AppAction::NavigateTabForward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Headers);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
 
         apply_action(AppAction::NavigateTabForward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Response);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Response);
 
         apply_action(AppAction::NavigateTabForward, &mut state);
-        assert_eq!(state.panel_focus, PanelFocus::EndpointsList);
+        assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
     }
 
     #[test]
     fn test_navigate_tab_backward() {
         let mut state = create_test_state();
-        state.panel_focus = PanelFocus::Details;
-        state.active_detail_tab = DetailTab::Response;
+        state.ui.panel_focus = PanelFocus::Details;
+        state.ui.active_detail_tab = DetailTab::Response;
 
         apply_action(AppAction::NavigateTabBackward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Headers);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
 
         apply_action(AppAction::NavigateTabBackward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Request);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Request);
 
         apply_action(AppAction::NavigateTabBackward, &mut state);
-        assert_eq!(state.active_detail_tab, DetailTab::Endpoint);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Endpoint);
 
         apply_action(AppAction::NavigateTabBackward, &mut state);
-        assert_eq!(state.panel_focus, PanelFocus::EndpointsList);
+        assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
     }
 
     #[test]
     fn test_toggle_view_mode() {
         let mut state = create_test_state();
-        assert_eq!(state.view_mode, ViewMode::Flat);
+        assert_eq!(state.ui.view_mode, ViewMode::Flat);
 
         apply_action(AppAction::ToggleViewMode, &mut state);
-        assert_eq!(state.view_mode, ViewMode::Grouped);
+        assert_eq!(state.ui.view_mode, ViewMode::Grouped);
 
         apply_action(AppAction::ToggleViewMode, &mut state);
-        assert_eq!(state.view_mode, ViewMode::Flat);
+        assert_eq!(state.ui.view_mode, ViewMode::Flat);
     }
 
     #[test]
     fn test_toggle_group_expanded() {
         let mut state = create_test_state();
-        assert!(state.expanded_groups.is_empty());
+        assert!(state.ui.expanded_groups.is_empty());
 
         apply_action(
             AppAction::ToggleGroupExpanded("Users".to_string()),
             &mut state,
         );
-        assert!(state.expanded_groups.contains("Users"));
-        assert_eq!(state.expanded_groups.len(), 1);
+        assert!(state.ui.expanded_groups.contains("Users"));
+        assert_eq!(state.ui.expanded_groups.len(), 1);
 
         apply_action(
             AppAction::ToggleGroupExpanded("Users".to_string()),
             &mut state,
         );
-        assert!(state.expanded_groups.is_empty());
+        assert!(state.ui.expanded_groups.is_empty());
     }
 
     #[test]
     fn test_scroll_actions() {
         let mut state = create_test_state();
-        state.panel_focus = PanelFocus::Details;
-        state.active_detail_tab = DetailTab::Response;
-        state.response_body_scroll = 10;
+        state.ui.panel_focus = PanelFocus::Details;
+        state.ui.active_detail_tab = DetailTab::Response;
+        state.ui.response_body_scroll = 10;
 
         apply_action(AppAction::ScrollDown, &mut state);
-        assert_eq!(state.response_body_scroll, 15);
+        assert_eq!(state.ui.response_body_scroll, 15);
 
         apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.response_body_scroll, 10);
+        assert_eq!(state.ui.response_body_scroll, 10);
 
         apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.response_body_scroll, 5);
+        assert_eq!(state.ui.response_body_scroll, 5);
     }
 
     #[test]
@@ -534,9 +546,9 @@ mod tests {
             &mut state,
         );
 
-        assert_eq!(state.input_mode, InputMode::EnteringUrl);
-        assert_eq!(state.url_input, "http://localhost:5000/swagger.json");
-        assert_eq!(state.base_url_input, "http://localhost:5000");
+        assert_eq!(state.input.mode, InputMode::EnteringUrl);
+        assert_eq!(state.input.url_input, "http://localhost:5000/swagger.json");
+        assert_eq!(state.input.base_url_input, "http://localhost:5000");
     }
 
     #[test]
@@ -547,19 +559,19 @@ mod tests {
             AppAction::AppendToUrlInput("http://".to_string()),
             &mut state,
         );
-        assert_eq!(state.url_input, "http://");
+        assert_eq!(state.input.url_input, "http://");
 
         apply_action(
             AppAction::AppendToUrlInput("localhost".to_string()),
             &mut state,
         );
-        assert_eq!(state.url_input, "http://localhost");
+        assert_eq!(state.input.url_input, "http://localhost");
 
         apply_action(AppAction::BackspaceUrlInput, &mut state);
-        assert_eq!(state.url_input, "http://localhos");
+        assert_eq!(state.input.url_input, "http://localhos");
 
         apply_action(AppAction::ClearUrlInput, &mut state);
-        assert_eq!(state.url_input, "");
+        assert_eq!(state.input.url_input, "");
     }
 
     #[test]
@@ -588,16 +600,16 @@ mod tests {
     #[test]
     fn test_auth_token_actions() {
         let mut state = create_test_state();
-        assert!(!state.auth.is_authenticated());
+        assert!(!state.request.auth.is_authenticated());
 
         apply_action(
             AppAction::SetAuthToken("my-secret-token".to_string()),
             &mut state,
         );
-        assert!(state.auth.is_authenticated());
+        assert!(state.request.auth.is_authenticated());
 
         apply_action(AppAction::ClearAuthToken, &mut state);
-        assert!(!state.auth.is_authenticated());
+        assert!(!state.request.auth.is_authenticated());
     }
 
     #[test]
@@ -608,41 +620,41 @@ mod tests {
             AppAction::AppendToParamBuffer("123".to_string()),
             &mut state,
         );
-        assert_eq!(state.param_edit_buffer, "123");
+        assert_eq!(state.request.param_edit_buffer, "123");
 
         apply_action(AppAction::BackspaceParamBuffer, &mut state);
-        assert_eq!(state.param_edit_buffer, "12");
+        assert_eq!(state.request.param_edit_buffer, "12");
 
         apply_action(AppAction::ClearParamBuffer, &mut state);
-        assert_eq!(state.param_edit_buffer, "");
+        assert_eq!(state.request.param_edit_buffer, "");
     }
 
     #[test]
     fn test_cancel_parameter_edit() {
         let mut state = create_test_state();
-        state.request_edit_mode = RequestEditMode::Editing("id".to_string());
-        state.param_edit_buffer = "test value".to_string();
+        state.request.edit_mode = RequestEditMode::Editing("id".to_string());
+        state.request.param_edit_buffer = "test value".to_string();
 
         apply_action(AppAction::CancelParameterEdit, &mut state);
-        assert_eq!(state.request_edit_mode, RequestEditMode::Viewing);
-        assert_eq!(state.param_edit_buffer, "");
+        assert_eq!(state.request.edit_mode, RequestEditMode::Viewing);
+        assert_eq!(state.request.param_edit_buffer, "");
     }
 
     #[test]
     fn test_navigate_param_up_down() {
         let mut state = create_test_state();
-        state.selected_param_index = 5;
+        state.ui.selected_param_index = 5;
 
         apply_action(AppAction::NavigateParamUp, &mut state);
-        assert_eq!(state.selected_param_index, 4);
+        assert_eq!(state.ui.selected_param_index, 4);
 
         apply_action(AppAction::NavigateParamDown, &mut state);
-        assert_eq!(state.selected_param_index, 5);
+        assert_eq!(state.ui.selected_param_index, 5);
 
         // Test saturation at zero
-        state.selected_param_index = 0;
+        state.ui.selected_param_index = 0;
         apply_action(AppAction::NavigateParamUp, &mut state);
-        assert_eq!(state.selected_param_index, 0);
+        assert_eq!(state.ui.selected_param_index, 0);
     }
 
     #[test]
@@ -650,21 +662,21 @@ mod tests {
         let mut state = create_test_state();
 
         apply_action(AppAction::EnterSearchMode, &mut state);
-        assert_eq!(state.input_mode, InputMode::Searching);
+        assert_eq!(state.input.mode, InputMode::Searching);
 
         apply_action(
             AppAction::AppendToSearchQuery("user".to_string()),
             &mut state,
         );
-        assert_eq!(state.search_query, "user");
+        assert_eq!(state.search.query, "user");
 
         apply_action(AppAction::BackspaceSearchQuery, &mut state);
-        assert_eq!(state.search_query, "use");
+        assert_eq!(state.search.query, "use");
 
         apply_action(AppAction::ClearSearchQuery, &mut state);
-        assert_eq!(state.search_query, "");
+        assert_eq!(state.search.query, "");
 
         apply_action(AppAction::ExitSearchMode, &mut state);
-        assert_eq!(state.input_mode, InputMode::Normal);
+        assert_eq!(state.input.mode, InputMode::Normal);
     }
 }

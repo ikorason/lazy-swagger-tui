@@ -42,20 +42,20 @@ pub fn handle_url_input(
             // Switch between fields
             let mut s = state.write().unwrap();
 
-            match s.active_url_field {
+            match s.input.active_url_field {
                 UrlInputField::SwaggerUrl => {
-                    s.active_url_field = UrlInputField::BaseUrl;
+                    s.input.active_url_field = UrlInputField::BaseUrl;
                 }
                 UrlInputField::BaseUrl => {
-                    s.active_url_field = UrlInputField::SwaggerUrl;
+                    s.input.active_url_field = UrlInputField::SwaggerUrl;
                 }
             }
         }
 
         KeyCode::Enter => {
             let mut s = state.write().unwrap();
-            let swagger_url = s.url_input.trim().to_string();
-            let base_url = s.base_url_input.trim().to_string();
+            let swagger_url = s.input.url_input.trim().to_string();
+            let base_url = s.input.base_url_input.trim().to_string();
 
             if !swagger_url.is_empty() {
                 // Validate both URLs
@@ -70,7 +70,7 @@ pub fn handle_url_input(
                             }
                         }
 
-                        s.input_mode = InputMode::Normal;
+                        s.input.mode = InputMode::Normal;
 
                         let submission = UrlSubmission {
                             swagger_url: swagger_url.clone(),
@@ -81,9 +81,9 @@ pub fn handle_url_input(
                             },
                         };
 
-                        s.url_input.clear();
-                        s.base_url_input.clear();
-                        s.active_url_field = UrlInputField::SwaggerUrl;
+                        s.input.url_input.clear();
+                        s.input.base_url_input.clear();
+                        s.input.active_url_field = UrlInputField::SwaggerUrl;
 
                         log_debug(&format!(
                             "URLs submitted - Swagger: {}, Base: {:?}",
@@ -103,21 +103,21 @@ pub fn handle_url_input(
 
         KeyCode::Esc => {
             let mut s = state.write().unwrap();
-            s.input_mode = InputMode::Normal;
-            s.url_input.clear();
-            s.base_url_input.clear();
-            s.active_url_field = UrlInputField::SwaggerUrl;
+            s.input.mode = InputMode::Normal;
+            s.input.url_input.clear();
+            s.input.base_url_input.clear();
+            s.input.active_url_field = UrlInputField::SwaggerUrl;
             log_debug("URL input cancelled");
         }
 
         KeyCode::Backspace => {
             let mut s = state.write().unwrap();
-            match s.active_url_field {
+            match s.input.active_url_field {
                 UrlInputField::SwaggerUrl => {
-                    s.url_input.pop();
+                    s.input.url_input.pop();
                 }
                 UrlInputField::BaseUrl => {
-                    s.base_url_input.pop();
+                    s.input.base_url_input.pop();
                 }
             }
         }
@@ -125,13 +125,13 @@ pub fn handle_url_input(
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+U: Clear entire line
             let mut s = state.write().unwrap();
-            match s.active_url_field {
+            match s.input.active_url_field {
                 UrlInputField::SwaggerUrl => {
-                    s.url_input.clear();
+                    s.input.url_input.clear();
                     log_debug("Cleared swagger URL input");
                 }
                 UrlInputField::BaseUrl => {
-                    s.base_url_input.clear();
+                    s.input.base_url_input.clear();
                     log_debug("Cleared base URL input");
                 }
             }
@@ -140,15 +140,13 @@ pub fn handle_url_input(
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+W: Delete word backwards
             let mut s = state.write().unwrap();
-            let input = match s.active_url_field {
-                UrlInputField::SwaggerUrl => &mut s.url_input,
-                UrlInputField::BaseUrl => &mut s.base_url_input,
+            let input = match s.input.active_url_field {
+                UrlInputField::SwaggerUrl => &mut s.input.url_input,
+                UrlInputField::BaseUrl => &mut s.input.base_url_input,
             };
 
             // Find last word boundary (space, slash, colon, dot)
-            if let Some(pos) =
-                input.rfind(|c: char| c == ' ' || c == '/' || c == ':' || c == '.')
-            {
+            if let Some(pos) = input.rfind(|c: char| c == ' ' || c == '/' || c == ':' || c == '.') {
                 input.truncate(pos);
             } else {
                 input.clear();
@@ -158,13 +156,13 @@ pub fn handle_url_input(
         KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+L: Clear current field (matching search behavior)
             let mut s = state.write().unwrap();
-            match s.active_url_field {
+            match s.input.active_url_field {
                 UrlInputField::SwaggerUrl => {
-                    s.url_input.clear();
+                    s.input.url_input.clear();
                     log_debug("Cleared swagger URL input");
                 }
                 UrlInputField::BaseUrl => {
-                    s.base_url_input.clear();
+                    s.input.base_url_input.clear();
                     log_debug("Cleared base URL input");
                 }
             }
@@ -204,12 +202,12 @@ pub fn handle_url_input(
             // Add all batched characters at once
             let mut s = state.write().unwrap();
             for ch in chars {
-                match s.active_url_field {
+                match s.input.active_url_field {
                     UrlInputField::SwaggerUrl => {
-                        s.url_input.push(ch);
+                        s.input.url_input.push(ch);
                     }
                     UrlInputField::BaseUrl => {
-                        s.base_url_input.push(ch);
+                        s.input.base_url_input.push(ch);
                     }
                 }
             }
@@ -218,7 +216,7 @@ pub fn handle_url_input(
                 log_debug(&format!(
                     "Batched {} characters for {}",
                     char_count,
-                    if matches!(s.active_url_field, UrlInputField::SwaggerUrl) {
+                    if matches!(s.input.active_url_field, UrlInputField::SwaggerUrl) {
                         "Swagger URL"
                     } else {
                         "Base URL"
@@ -243,40 +241,40 @@ pub fn handle_token_input(
     match key.code {
         KeyCode::Enter => {
             let mut s = state.write().unwrap();
-            let token = s.token_input.trim().to_string();
+            let token = s.input.token_input.trim().to_string();
 
             if !token.is_empty() {
-                s.auth.set_token(token);
+                s.request.auth.set_token(token);
                 log_debug("Token saved");
             } else {
                 log_debug("Empty token, not saving");
             }
-            s.input_mode = InputMode::Normal;
-            s.token_input.clear();
+            s.input.mode = InputMode::Normal;
+            s.input.token_input.clear();
         }
         KeyCode::Esc => {
             let mut s = state.write().unwrap();
-            s.input_mode = InputMode::Normal;
-            s.token_input.clear();
+            s.input.mode = InputMode::Normal;
+            s.input.token_input.clear();
             log_debug("Token input cancelled");
         }
         KeyCode::Backspace => {
             let mut s = state.write().unwrap();
-            s.token_input.pop();
+            s.input.token_input.pop();
         }
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+U: Clear entire token
             let mut s = state.write().unwrap();
-            s.token_input.clear();
+            s.input.token_input.clear();
             log_debug("Cleared token input");
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+W: Delete word backwards (less useful for tokens, but consistent)
             let mut s = state.write().unwrap();
-            if let Some(pos) = s.token_input.rfind(|c: char| !c.is_alphanumeric()) {
-                s.token_input.truncate(pos);
+            if let Some(pos) = s.input.token_input.rfind(|c: char| !c.is_alphanumeric()) {
+                s.input.token_input.truncate(pos);
             } else {
-                s.token_input.clear();
+                s.input.token_input.clear();
             }
         }
         KeyCode::Char(c) => {
@@ -313,7 +311,7 @@ pub fn handle_token_input(
             // Add all batched characters at once
             let mut s = state.write().unwrap();
             for ch in chars {
-                s.token_input.push(ch);
+                s.input.token_input.push(ch);
             }
 
             if char_count > 1 {
@@ -336,13 +334,13 @@ pub fn handle_clear_confirmation(
     match key.code {
         KeyCode::Char('y') | KeyCode::Char('Y') => {
             let mut s = state.write().unwrap();
-            s.auth.clear_token();
-            s.input_mode = InputMode::Normal;
+            s.request.auth.clear_token();
+            s.input.mode = InputMode::Normal;
             log_debug("Token cleared");
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             let mut s = state.write().unwrap();
-            s.input_mode = InputMode::Normal;
+            s.input.mode = InputMode::Normal;
             log_debug("Token clear cancelled");
         }
         _ => {}
@@ -355,7 +353,7 @@ pub fn handle_auth_dialog(state: Arc<RwLock<AppState>>) {
     // Pre-fill with current token if exists
     let current_token = {
         let s = state.read().unwrap();
-        s.auth.token.clone().unwrap_or_default()
+        s.request.auth.token.clone().unwrap_or_default()
     };
 
     apply_many(

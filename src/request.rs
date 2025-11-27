@@ -14,8 +14,8 @@ pub fn execute_request_background(
     // Mark this endpoint as executing
     {
         let mut s = state.write().unwrap();
-        s.executing_endpoint = Some(endpoint.path.clone());
-        s.current_response = None; // Clear any previous response
+        s.request.executing_endpoint = Some(endpoint.path.clone());
+        s.request.current_response = None; // Clear any previous response
     }
 
     // Spawn background task
@@ -23,7 +23,8 @@ pub fn execute_request_background(
         // Get path and query parameters from request config
         let (path_params, query_params) = {
             let s = state.read().unwrap();
-            s.request_configs
+            s.request
+                .configs
                 .get(&endpoint.path)
                 .map(|config| (config.path_params.clone(), config.query_params.clone()))
                 .unwrap_or_default()
@@ -36,8 +37,8 @@ pub fn execute_request_background(
                 Err(e) => {
                     // Handle URL building error
                     let mut s = state.write().unwrap();
-                    s.executing_endpoint = None;
-                    s.current_response =
+                    s.request.executing_endpoint = None;
+                    s.request.current_response =
                         Some(ApiResponse::error(format!("Failed to build URL: {}", e)));
                     return;
                 }
@@ -59,10 +60,10 @@ pub fn execute_request_background(
         // Store response and clear executing flag
         {
             let mut s = state.write().unwrap();
-            s.executing_endpoint = None;
-            s.current_response = Some(response);
-            s.response_body_scroll = 0; // Reset to top
-            s.headers_scroll = 0; // Reset to top
+            s.request.executing_endpoint = None;
+            s.request.current_response = Some(response);
+            s.ui.response_body_scroll = 0; // Reset to top
+            s.ui.headers_scroll = 0; // Reset to top
         }
     });
 }
@@ -77,7 +78,7 @@ async fn execute_request(
     // Get auth token if available
     let token = {
         let s = state.read().unwrap();
-        s.auth.token.clone()
+        s.request.auth.token.clone()
     };
 
     // Build request with the appropriate HTTP method
