@@ -59,7 +59,8 @@ pub fn handle_enter(
         }
     } else {
         // In grouped mode: Check if we're on a group header or endpoint
-        if let Some(item) = state_read.render_items.get(*selected_index) {
+        let render_items = state_read.get_render_items();
+        if let Some(item) = render_items.get(*selected_index) {
             match item {
                 RenderItem::GroupHeader { name, .. } => {
                     let group_name = name.clone();

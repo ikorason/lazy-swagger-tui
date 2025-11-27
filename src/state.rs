@@ -12,7 +12,6 @@ pub struct AppState {
     pub grouped_endpoints: HashMap<String, Vec<ApiEndpoint>>,
     pub view_mode: ViewMode,
     pub expanded_groups: HashSet<String>,
-    pub render_items: Vec<RenderItem>,
     pub auth: AuthState,
     pub input_mode: InputMode,
     pub token_input: String,
@@ -67,7 +66,6 @@ impl Default for AppState {
             grouped_endpoints: HashMap::new(),
             view_mode: ViewMode::Grouped,
             expanded_groups: HashSet::new(),
-            render_items: Vec::new(),
             auth: AuthState::new(),
             input_mode: InputMode::Normal,
             token_input: String::new(),
@@ -92,15 +90,46 @@ impl Default for AppState {
 }
 
 impl AppState {
+    /// Compute render items for grouped view on-demand
+    /// This builds the flattened list of group headers and endpoints
+    pub fn get_render_items(&self) -> Vec<RenderItem> {
+        let mut render_items = Vec::new();
+        let grouped = self.active_grouped_endpoints();
+        let mut group_names: Vec<&String> = grouped.keys().collect();
+        group_names.sort();
+
+        for group_name in group_names {
+            let group_endpoints = &grouped[group_name];
+            let is_expanded = self.expanded_groups.contains(group_name);
+
+            render_items.push(RenderItem::GroupHeader {
+                name: group_name.clone(),
+                count: group_endpoints.len(),
+                expanded: is_expanded,
+            });
+
+            if is_expanded {
+                for endpoint in group_endpoints {
+                    render_items.push(RenderItem::Endpoint {
+                        endpoint: endpoint.clone(),
+                    });
+                }
+            }
+        }
+
+        render_items
+    }
+
     /// Get the selected endpoint based on the current view mode and selected index
-    pub fn get_selected_endpoint(&self, selected_index: usize) -> Option<&ApiEndpoint> {
+    pub fn get_selected_endpoint(&self, selected_index: usize) -> Option<ApiEndpoint> {
         match self.view_mode {
-            ViewMode::Flat => self.endpoints.get(selected_index),
+            ViewMode::Flat => self.endpoints.get(selected_index).cloned(),
             ViewMode::Grouped => {
-                self.render_items
+                let render_items = self.get_render_items();
+                render_items
                     .get(selected_index)
                     .and_then(|item| match item {
-                        RenderItem::Endpoint { endpoint } => Some(endpoint),
+                        RenderItem::Endpoint { endpoint } => Some(endpoint.clone()),
                         RenderItem::GroupHeader { .. } => None,
                     })
             }

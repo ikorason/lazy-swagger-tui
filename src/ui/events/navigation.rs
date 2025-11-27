@@ -41,7 +41,7 @@ pub fn handle_down(
 
     let max_index = match state_guard.view_mode {
         ViewMode::Flat => state_guard.endpoints.len().saturating_sub(1),
-        ViewMode::Grouped => state_guard.render_items.len().saturating_sub(1),
+        ViewMode::Grouped => state_guard.get_render_items().len().saturating_sub(1),
     };
     drop(state_guard);
 

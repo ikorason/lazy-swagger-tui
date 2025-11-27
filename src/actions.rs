@@ -405,7 +405,6 @@ mod tests {
             retry_count: 0,
             view_mode: ViewMode::Flat,
             expanded_groups: HashSet::new(),
-            render_items: vec![],
             panel_focus: PanelFocus::EndpointsList,
             active_detail_tab: DetailTab::Endpoint,
             selected_param_index: 0,

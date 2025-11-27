@@ -103,6 +103,7 @@ impl App {
         // Check if we need to initialize selection (do this before acquiring lock)
         let should_select = self.list_state.selected().is_none();
 
+        // Single read lock for the entire draw - no more lock dance!
         let state = self.state.read().unwrap();
 
         // Create main layout: Header, Search Bar, Body, Footer
@@ -119,7 +120,7 @@ impl App {
         let body_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-            .split(main_chunks[2]); // Changed from [1] to [2]
+            .split(main_chunks[2]);
 
         let display_url = self.swagger_url.as_deref().unwrap_or("No URL configured");
 
@@ -140,7 +141,7 @@ impl App {
         if should_select {
             let has_items = match state.view_mode {
                 crate::types::ViewMode::Flat => !state.endpoints.is_empty(),
-                crate::types::ViewMode::Grouped => !state.render_items.is_empty(),
+                crate::types::ViewMode::Grouped => !state.get_render_items().is_empty(),
             };
 
             if has_items {
@@ -157,41 +158,18 @@ impl App {
             &mut self.list_state,
         );
 
-        // After rendering grouped view, update render_items if needed
-        if matches!(state.view_mode, crate::types::ViewMode::Grouped) {
-            drop(state); // Release read lock
-            let render_items = ui::build_grouped_render_items(&self.state.read().unwrap());
-            let mut state_write = self.state.write().unwrap();
-            state_write.render_items = render_items;
-            drop(state_write);
+        // Render right panel (details)
+        ui::render_details_panel(
+            frame,
+            body_chunks[1],
+            &state,
+            self.event_handler.selected_index,
+        );
 
-            // Re-acquire read lock for remaining rendering
-            let state = self.state.read().unwrap();
+        // Render footer
+        ui::render_footer(frame, main_chunks[3], &state.view_mode);
 
-            // Render right panel (details)
-            ui::render_details_panel(
-                frame,
-                body_chunks[1],
-                &state,
-                self.event_handler.selected_index,
-            );
-
-            // Render footer
-            ui::render_footer(frame, main_chunks[3], &state.view_mode);
-        } else {
-            // In flat mode, just render remaining panels
-            ui::render_details_panel(
-                frame,
-                body_chunks[1],
-                &state,
-                self.event_handler.selected_index,
-            );
-
-            ui::render_footer(frame, main_chunks[3], &state.view_mode);
-        }
-
-        // Render modals LAST - after everything else (re-borrow state if needed)
-        let state = self.state.read().unwrap();
+        // Render modals LAST - after everything else
         match state.input_mode {
             InputMode::EnteringUrl => {
                 draw::render_url_input_modal(frame, &state);
@@ -204,6 +182,7 @@ impl App {
             }
             InputMode::Normal | InputMode::Searching => {}
         }
+        // state read lock is automatically dropped here
     }
 
     fn fetch_endpoints_background(&self) {

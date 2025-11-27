@@ -258,8 +258,9 @@ fn render_grouped_list(
     list_state: &mut ListState,
 ) {
     let mut items = Vec::new();
+    let render_items = state.get_render_items();
 
-    for item in &state.render_items {
+    for item in &render_items {
         match item {
             RenderItem::GroupHeader {
                 name,
@@ -381,10 +382,10 @@ pub fn render_details_panel(
     // Render active tab content
     if let Some(endpoint) = selected_endpoint {
         match state.active_detail_tab {
-            DetailTab::Endpoint => render_endpoint_tab(frame, chunks[1], endpoint),
-            DetailTab::Request => render_request_tab(frame, chunks[1], endpoint, state),
+            DetailTab::Endpoint => render_endpoint_tab(frame, chunks[1], &endpoint),
+            DetailTab::Request => render_request_tab(frame, chunks[1], &endpoint, state),
             DetailTab::Headers => render_headers_tab(frame, chunks[1], state),
-            DetailTab::Response => render_response_tab(frame, chunks[1], endpoint, state),
+            DetailTab::Response => render_response_tab(frame, chunks[1], &endpoint, state),
         }
     } else {
         // No endpoint selected
@@ -897,36 +898,6 @@ fn get_method_color(method: &str) -> Color {
         "PATCH" => Color::Cyan,
         _ => Color::White,
     }
-}
-
-/// Helper to build render_items for grouped view
-/// Returns the render_items that should be stored in state
-pub fn build_grouped_render_items(state: &AppState) -> Vec<RenderItem> {
-    let mut render_items = Vec::new();
-    let grouped = state.active_grouped_endpoints();
-    let mut group_names: Vec<&String> = grouped.keys().collect();
-    group_names.sort();
-
-    for group_name in group_names {
-        let group_endpoints = &grouped[group_name];
-        let is_expanded = state.expanded_groups.contains(group_name);
-
-        render_items.push(RenderItem::GroupHeader {
-            name: group_name.clone(),
-            count: group_endpoints.len(),
-            expanded: is_expanded,
-        });
-
-        if is_expanded {
-            for endpoint in group_endpoints {
-                render_items.push(RenderItem::Endpoint {
-                    endpoint: endpoint.clone(),
-                });
-            }
-        }
-    }
-
-    render_items
 }
 
 pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
