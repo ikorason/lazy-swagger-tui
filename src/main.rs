@@ -1,6 +1,7 @@
 mod actions;
 mod app;
 mod config;
+mod editor;
 mod request;
 mod state;
 mod swagger;

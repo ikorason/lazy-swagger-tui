@@ -287,14 +287,28 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+    // Adjust layout based on whether there's an error
+    let has_error = state.input.body_validation_error.is_some();
+    let constraints = if has_error {
+        vec![
+            Constraint::Length(1), // Label
+            Constraint::Min(5),    // Body content (grows)
+            Constraint::Length(2), // Error message (2 lines with padding)
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Help
+        ]
+    } else {
+        vec![
             Constraint::Length(1), // Label
             Constraint::Min(5),    // Body content (grows)
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Help
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(inner);
 
     // Label
@@ -303,7 +317,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(label, chunks[0]);
 
     // Body input - multi-line with wrapping
-    let body_text = Paragraph::new(state.input.body_input.clone())
+    let body_text = Paragraph::new(state.input.body_editor.content().to_string())
         .style(
             Style::default()
                 .fg(Color::Yellow)
@@ -312,9 +326,24 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
         .wrap(Wrap { trim: false });
     frame.render_widget(body_text, chunks[1]);
 
-    // Help text
-    let help = Paragraph::new("Enter: Confirm & Format  |  Esc: Cancel  |  Ctrl+L: Clear")
+    // Error message (if present)
+    if has_error {
+        if let Some(ref error_msg) = state.input.body_validation_error {
+            let error = Paragraph::new(format!("⚠ {}", error_msg))
+                .style(
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .wrap(Wrap { trim: true });
+            frame.render_widget(error, chunks[2]);
+        }
+    }
+
+    // Help text (position depends on whether error is shown)
+    let help_index = if has_error { 4 } else { 3 };
+    let help = Paragraph::new("Enter: Confirm & Format  |  Esc: Cancel  |  Ctrl+L: Clear  |  ←/→: Move cursor")
         .style(Style::default().fg(Color::Rgb(150, 150, 150)))
         .alignment(Alignment::Center);
-    frame.render_widget(help, chunks[3]);
+    frame.render_widget(help, chunks[help_index]);
 }

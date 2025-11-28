@@ -1,3 +1,4 @@
+use crate::editor::BodyEditor;
 use crate::types::{
     ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
     RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
@@ -32,7 +33,8 @@ pub struct InputState {
     pub url_input: String,
     pub base_url_input: String,
     pub active_url_field: UrlInputField,
-    pub body_input: String,
+    pub body_editor: BodyEditor,
+    pub body_validation_error: Option<String>,
 }
 
 /// HTTP request and authentication state
@@ -87,7 +89,8 @@ impl Default for AppState {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
-                body_input: String::new(),
+                body_editor: BodyEditor::new(),
+                body_validation_error: None,
             },
             request: RequestState {
                 auth: AuthState::new(),

@@ -367,14 +367,11 @@ pub fn handle_body_dialog(state: Arc<RwLock<AppState>>, selected_index: usize) {
     };
 
     if endpoint_path.is_some() {
-        apply_many(
-            state,
-            vec![
-                AppAction::EnterBodyInputMode,
-                AppAction::AppendToBodyInput(current_body),
-            ],
-        );
-        log_debug("Entering body input mode");
+        // Set the editor content directly instead of using AppendToBodyInput
+        let mut s = state.write().unwrap();
+        s.input.body_editor.set_content(current_body.clone());
+        s.input.mode = InputMode::EnteringBody;
+        log_debug(&format!("Entering body input mode with initial content: {:?}", current_body));
     }
 }
 
@@ -389,7 +386,6 @@ pub fn handle_body_input(
     match key.code {
         KeyCode::Enter => {
             let state_read = state.read().unwrap();
-            let body_value = state_read.input.body_input.clone();
 
             // Get the current endpoint path
             let endpoint_path = state_read
@@ -399,95 +395,88 @@ pub fn handle_body_input(
             drop(state_read);
 
             if let Some(path) = endpoint_path {
-                // Try to format JSON
-                let formatted_body =
-                    match serde_json::from_str::<serde_json::Value>(&body_value) {
-                        Ok(json) => {
-                            // Valid JSON - prettify it
-                            serde_json::to_string_pretty(&json).unwrap_or(body_value.clone())
-                        }
-                        Err(_) => {
-                            // Invalid JSON - keep as-is (no validation for now)
-                            body_value.clone()
-                        }
-                    };
-
                 let mut s = state.write().unwrap();
 
-                // Save formatted body to config
-                let config = s.get_or_create_request_config_by_path(&path);
-                config.body = if formatted_body.trim().is_empty() {
-                    None
-                } else {
-                    Some(formatted_body)
-                };
+                // Log the original content before formatting
+                let original_body = s.input.body_editor.content().to_string();
+                log_debug(&format!("Original body: {}", original_body));
 
-                // Close modal
-                s.input.mode = InputMode::Normal;
-                s.input.body_input.clear();
+                // Validate JSON before accepting
+                let validation_result = s.input.body_editor.validate_json();
 
-                log_debug("Body saved and formatted");
+                match validation_result {
+                    Ok(_) => {
+                        // Valid JSON - format and save
+                        let _ = s.input.body_editor.format_json();
+                        let formatted_body = s.input.body_editor.content().to_string();
+
+                        log_debug(&format!("Formatted JSON successfully: {}", formatted_body));
+
+                        // Save formatted body to config
+                        let config = s.get_or_create_request_config_by_path(&path);
+                        config.body = if formatted_body.trim().is_empty() {
+                            None
+                        } else {
+                            Some(formatted_body.clone())
+                        };
+
+                        log_debug(&format!("Saved body to config for path '{}': {:?}", path, config.body));
+
+                        // Close modal and clear error
+                        s.input.mode = InputMode::Normal;
+                        s.input.body_editor.clear();
+                        s.input.body_validation_error = None;
+
+                        log_debug("Body editor modal closed");
+                    }
+                    Err(e) => {
+                        // Invalid JSON - show error and keep modal open
+                        s.input.body_validation_error = Some(e.clone());
+                        log_debug(&format!("JSON validation failed: {}. Keeping modal open.", e));
+                    }
+                }
             }
         }
 
         KeyCode::Esc => {
             let mut s = state.write().unwrap();
             s.input.mode = InputMode::Normal;
-            s.input.body_input.clear();
+            s.input.body_editor.clear();
+            s.input.body_validation_error = None;
             log_debug("Body input cancelled");
         }
 
-        KeyCode::Backspace => {
-            let mut s = state.write().unwrap();
-            s.input.body_input.pop();
-        }
-
-        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+L: Clear entire body (consistent with other inputs)
-            let mut s = state.write().unwrap();
-            s.input.body_input.clear();
-            log_debug("Cleared body input");
-        }
-
         KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Paste batching support (same pattern as URL/token input)
-            let mut chars = vec![c];
-
-            loop {
-                match event::poll(std::time::Duration::from_millis(0)) {
-                    Ok(true) => {
-                        if let Ok(Event::Key(next_key)) = event::read() {
-                            match next_key.code {
-                                KeyCode::Char(next_c)
-                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                {
-                                    chars.push(next_c);
-                                }
-                                _ => break,
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ => break,
-                }
-            }
-
-            let char_count = chars.len();
+            // Use the editor's built-in paste batching
             let mut s = state.write().unwrap();
-            for ch in chars {
-                s.input.body_input.push(ch);
-            }
+
+            // Clear validation error when user starts typing
+            s.input.body_validation_error = None;
+
+            let char_count = s.input.body_editor.handle_paste_batch(c);
 
             if char_count > 1 {
                 log_debug(&format!(
                     "Batched {} characters (paste detected)",
                     char_count
                 ));
+
+                // Debug: show exact content including special chars
+                let content = s.input.body_editor.content();
+                log_debug(&format!("Editor content after paste (len={}): {:?}", content.len(), content));
+                log_debug(&format!("First 20 bytes: {:?}", content.as_bytes().iter().take(20).collect::<Vec<_>>()));
             }
         }
 
-        _ => {}
+        _ => {
+            // Delegate all other key events to the editor
+            let mut s = state.write().unwrap();
+
+            // Clear validation error when user edits
+            s.input.body_validation_error = None;
+
+            s.input.body_editor.handle_key_event(key);
+        }
     }
 
     Ok(())

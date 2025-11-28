@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::editor::BodyEditor;
 use crate::state::AppState;
 use crate::types::{DetailTab, InputMode, PanelFocus, RequestEditMode, UrlInputField};
 
@@ -210,7 +212,7 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::ExitBodyInputMode => {
             state.input.mode = InputMode::Normal;
-            state.input.body_input.clear();
+            state.input.body_editor.clear();
         }
         AppAction::EnterConfirmClearTokenMode => {
             state.input.mode = InputMode::ConfirmClearToken;
@@ -236,7 +238,7 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             state.search.query.push_str(&text);
         }
         AppAction::AppendToBodyInput(text) => {
-            state.input.body_input.push_str(&text);
+            state.input.body_editor.insert_str(&text);
         }
         AppAction::ClearUrlInput => {
             state.input.url_input.clear();
@@ -251,7 +253,7 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             state.search.query.clear();
         }
         AppAction::ClearBodyInput => {
-            state.input.body_input.clear();
+            state.input.body_editor.clear();
         }
         AppAction::BackspaceUrlInput => {
             state.input.url_input.pop();
@@ -266,7 +268,7 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             state.search.query.pop();
         }
         AppAction::BackspaceBodyInput => {
-            state.input.body_input.pop();
+            state.input.body_editor.delete_char_before_cursor();
         }
         AppAction::DeleteWordUrlInput => {
             delete_word(&mut state.input.url_input);
@@ -412,7 +414,8 @@ mod tests {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
-                body_input: String::new(),
+                body_editor: BodyEditor::new(),
+                body_validation_error: None,
             },
             request: RequestState {
                 auth: AuthState::new(),
