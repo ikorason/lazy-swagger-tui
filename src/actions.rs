@@ -107,9 +107,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             use DetailTab::*;
             match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
+                    // Keep the current tab when switching to Details panel
                     state.ui.panel_focus = PanelFocus::Details;
-                    state.ui.active_detail_tab = Endpoint;
-                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Endpoint) => {
                     state.ui.active_detail_tab = Request;
@@ -131,8 +130,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             use DetailTab::*;
             match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
+                    // Keep the current tab when switching to Details panel
                     state.ui.panel_focus = PanelFocus::Details;
-                    state.ui.active_detail_tab = Response;
                 }
                 (PanelFocus::Details, Request) => {
                     state.ui.active_detail_tab = Endpoint;
@@ -476,6 +475,36 @@ mod tests {
 
         apply_action(AppAction::NavigateTabBackward, &mut state);
         assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
+    }
+
+    #[test]
+    fn test_tab_navigation_preserves_active_tab() {
+        let mut state = create_test_state();
+
+        // Start on Request tab in Details panel
+        state.ui.panel_focus = PanelFocus::Details;
+        state.ui.active_detail_tab = DetailTab::Request;
+
+        // Navigate to EndpointsList
+        apply_action(AppAction::NavigateToPanel(PanelFocus::EndpointsList), &mut state);
+        assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
+
+        // Tab back to Details - should stay on Request tab
+        apply_action(AppAction::NavigateTabForward, &mut state);
+        assert_eq!(state.ui.panel_focus, PanelFocus::Details);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Request);
+
+        // Switch to Headers tab
+        apply_action(AppAction::NavigateTabForward, &mut state);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
+
+        // Navigate to EndpointsList with '1'
+        apply_action(AppAction::NavigateToPanel(PanelFocus::EndpointsList), &mut state);
+
+        // Shift+Tab back to Details - should stay on Headers tab
+        apply_action(AppAction::NavigateTabBackward, &mut state);
+        assert_eq!(state.ui.panel_focus, PanelFocus::Details);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
     }
 
     #[test]
