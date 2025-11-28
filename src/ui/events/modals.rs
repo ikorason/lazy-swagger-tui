@@ -371,7 +371,10 @@ pub fn handle_body_dialog(state: Arc<RwLock<AppState>>, selected_index: usize) {
         let mut s = state.write().unwrap();
         s.input.body_editor.set_content(current_body.clone());
         s.input.mode = InputMode::EnteringBody;
-        log_debug(&format!("Entering body input mode with initial content: {:?}", current_body));
+        log_debug(&format!(
+            "Entering body input mode with initial content: {:?}",
+            current_body
+        ));
     }
 }
 
@@ -383,8 +386,32 @@ pub fn handle_body_input(
 ) -> Result<()> {
     use crossterm::event::KeyModifiers;
 
+    // Debug: Log all Enter key events
+    if matches!(key.code, KeyCode::Enter) {
+        log_debug(&format!(
+            "Enter key detected - code: {:?}, modifiers: {:?}, has_shift: {}, has_ctrl: {}",
+            key.code,
+            key.modifiers,
+            key.modifiers.contains(KeyModifiers::SHIFT),
+            key.modifiers.contains(KeyModifiers::CONTROL)
+        ));
+    }
+
     match key.code {
+        // Ctrl+N: Insert newline (N for Newline)
+        KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let mut s = state.write().unwrap();
+            s.input.body_validation_error = None;
+            s.input.body_editor.insert_newline();
+            log_debug("Inserted newline at cursor position (Ctrl+N)");
+        }
+
         KeyCode::Enter => {
+            // Enter (without Shift or Ctrl): Save and close
+            log_debug(&format!(
+                "Enter pressed for save (modifiers: {:?})",
+                key.modifiers
+            ));
             let state_read = state.read().unwrap();
 
             // Get the current endpoint path
@@ -420,7 +447,10 @@ pub fn handle_body_input(
                             Some(formatted_body.clone())
                         };
 
-                        log_debug(&format!("Saved body to config for path '{}': {:?}", path, config.body));
+                        log_debug(&format!(
+                            "Saved body to config for path '{}': {:?}",
+                            path, config.body
+                        ));
 
                         // Close modal and clear error
                         s.input.mode = InputMode::Normal;
@@ -432,7 +462,10 @@ pub fn handle_body_input(
                     Err(e) => {
                         // Invalid JSON - show error and keep modal open
                         s.input.body_validation_error = Some(e.clone());
-                        log_debug(&format!("JSON validation failed: {}. Keeping modal open.", e));
+                        log_debug(&format!(
+                            "JSON validation failed: {}. Keeping modal open.",
+                            e
+                        ));
                     }
                 }
             }
@@ -461,10 +494,60 @@ pub fn handle_body_input(
                     char_count
                 ));
 
-                // Debug: show exact content including special chars
-                let content = s.input.body_editor.content();
-                log_debug(&format!("Editor content after paste (len={}): {:?}", content.len(), content));
-                log_debug(&format!("First 20 bytes: {:?}", content.as_bytes().iter().take(20).collect::<Vec<_>>()));
+                // Log content before format
+                let before_content = s.input.body_editor.content();
+                log_debug(&format!(
+                    "Content before format (len={}): {}",
+                    before_content.len(),
+                    before_content
+                ));
+                log_debug(&format!(
+                    "Lines before format: {}",
+                    before_content.lines().count()
+                ));
+                log_debug(&format!(
+                    "Cursor before format: {:?}",
+                    s.input.body_editor.cursor()
+                ));
+
+                // Auto-format JSON on paste
+                let format_result = s.input.body_editor.format_json();
+                match format_result {
+                    Ok(_) => {
+                        let after_content = s.input.body_editor.content();
+                        log_debug("Auto-formatted pasted JSON successfully");
+                        log_debug(&format!(
+                            "Content after format (len={}): {}",
+                            after_content.len(),
+                            after_content
+                        ));
+                        log_debug(&format!(
+                            "Lines after format: {}",
+                            after_content.lines().count()
+                        ));
+                        log_debug(&format!(
+                            "Cursor after format: {:?}",
+                            s.input.body_editor.cursor()
+                        ));
+
+                        // Also log the rendered version
+                        let with_cursor = s.input.body_editor.content_with_cursor();
+                        log_debug(&format!(
+                            "Rendered content (len={}, lines={}): {}",
+                            with_cursor.len(),
+                            with_cursor.lines().count(),
+                            with_cursor
+                        ));
+                    }
+                    Err(e) => {
+                        log_debug(&format!(
+                            "Auto-format failed (invalid JSON): {}. Keeping pasted content as-is.",
+                            e
+                        ));
+                        // Don't show error - just keep the pasted content unformatted
+                        // User can fix it and format will happen on Enter
+                    }
+                }
             }
         }
 

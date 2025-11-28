@@ -319,8 +319,7 @@ pub fn render_headers_tab(frame: &mut Frame, area: Rect, state: &AppState) {
         )));
     }
 
-    let content = Paragraph::new(lines)
-        .wrap(Wrap { trim: false });
+    let content = Paragraph::new(lines).wrap(Wrap { trim: false });
 
     frame.render_widget(content, area);
 }
@@ -384,8 +383,7 @@ pub fn render_response_tab(
         )));
     }
 
-    let content = Paragraph::new(lines)
-        .wrap(Wrap { trim: false });
+    let content = Paragraph::new(lines).wrap(Wrap { trim: false });
 
     frame.render_widget(content, area);
 }

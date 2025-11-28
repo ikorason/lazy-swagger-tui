@@ -291,7 +291,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     let has_error = state.input.body_validation_error.is_some();
     let constraints = if has_error {
         vec![
-            Constraint::Length(1), // Label
+            Constraint::Length(1), // Label with cursor position
             Constraint::Min(5),    // Body content (grows)
             Constraint::Length(2), // Error message (2 lines with padding)
             Constraint::Length(1), // Spacer
@@ -299,7 +299,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
         ]
     } else {
         vec![
-            Constraint::Length(1), // Label
+            Constraint::Length(1), // Label with cursor position
             Constraint::Min(5),    // Body content (grows)
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Help
@@ -311,13 +311,15 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
         .constraints(constraints)
         .split(inner);
 
-    // Label
-    let label = Paragraph::new("JSON Body:")
+    // Label with cursor position
+    let cursor_pos = state.input.body_editor.cursor_position_display();
+    let label = Paragraph::new(format!("JSON Body: {}", cursor_pos))
         .style(Style::default().fg(Color::LightGreen));
     frame.render_widget(label, chunks[0]);
 
-    // Body input - multi-line with wrapping
-    let body_text = Paragraph::new(state.input.body_editor.content().to_string())
+    // Body input - multi-line with cursor marker
+    let body_content = state.input.body_editor.content_with_cursor();
+    let body_text = Paragraph::new(body_content)
         .style(
             Style::default()
                 .fg(Color::Yellow)
@@ -330,11 +332,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     if has_error {
         if let Some(ref error_msg) = state.input.body_validation_error {
             let error = Paragraph::new(format!("⚠ {}", error_msg))
-                .style(
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
-                )
+                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                 .wrap(Wrap { trim: true });
             frame.render_widget(error, chunks[2]);
         }
@@ -342,8 +340,10 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
 
     // Help text (position depends on whether error is shown)
     let help_index = if has_error { 4 } else { 3 };
-    let help = Paragraph::new("Enter: Confirm & Format  |  Esc: Cancel  |  Ctrl+L: Clear  |  ←/→: Move cursor")
-        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
-        .alignment(Alignment::Center);
+    let help = Paragraph::new(
+        "Enter: Save  |  Ctrl+N: New Line  |  Esc: Cancel  |  Ctrl+L: Clear  |  ↑↓←→: Navigate",
+    )
+    .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+    .alignment(Alignment::Center);
     frame.render_widget(help, chunks[help_index]);
 }

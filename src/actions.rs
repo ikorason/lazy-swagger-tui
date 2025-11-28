@@ -489,7 +489,10 @@ mod tests {
         state.ui.active_detail_tab = DetailTab::Request;
 
         // Navigate to EndpointsList
-        apply_action(AppAction::NavigateToPanel(PanelFocus::EndpointsList), &mut state);
+        apply_action(
+            AppAction::NavigateToPanel(PanelFocus::EndpointsList),
+            &mut state,
+        );
         assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
 
         // Tab back to Details - should stay on Request tab
@@ -502,7 +505,10 @@ mod tests {
         assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
 
         // Navigate to EndpointsList with '1'
-        apply_action(AppAction::NavigateToPanel(PanelFocus::EndpointsList), &mut state);
+        apply_action(
+            AppAction::NavigateToPanel(PanelFocus::EndpointsList),
+            &mut state,
+        );
 
         // Shift+Tab back to Details - should stay on Headers tab
         apply_action(AppAction::NavigateTabBackward, &mut state);
