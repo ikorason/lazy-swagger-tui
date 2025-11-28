@@ -141,7 +141,7 @@ impl EventHandler {
                                                 state.clone(),
                                             );
                                         }
-                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                        // For other tabs, j/k do nothing
                                     }
                                 }
                             }
@@ -174,7 +174,7 @@ impl EventHandler {
                                         if active_tab == DetailTab::Request {
                                             navigation::handle_request_param_up(state.clone());
                                         }
-                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                        // For other tabs, j/k do nothing
                                     }
                                 }
                             }
@@ -358,36 +358,6 @@ impl EventHandler {
                                 state.clone(),
                                 list_state,
                             );
-                        }
-
-                        // -- with modifiers
-                        // Ctrl+u: Scroll up in focused section
-                        KeyCode::Char('u')
-                            if key
-                                .modifiers
-                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                        {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            drop(state_read);
-
-                            if panel == PanelFocus::Details {
-                                apply(state.clone(), AppAction::ScrollUp);
-                            }
-                        }
-                        // Ctrl+d: Scroll down in focused section
-                        KeyCode::Char('d')
-                            if key
-                                .modifiers
-                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                        {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            drop(state_read);
-
-                            if panel == PanelFocus::Details {
-                                apply(state.clone(), AppAction::ScrollDown);
-                            }
                         }
 
                         // Special keys --

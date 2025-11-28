@@ -68,8 +68,6 @@ pub fn execute_request_background(
             let mut s = state.write().unwrap();
             s.request.executing_endpoint = None;
             s.request.current_response = Some(response);
-            s.ui.response_body_scroll = 0; // Reset to top
-            s.ui.headers_scroll = 0; // Reset to top
         }
     });
 }

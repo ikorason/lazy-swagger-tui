@@ -122,21 +122,6 @@ pub fn handle_url_input(
             }
         }
 
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+U: Clear entire line
-            let mut s = state.write().unwrap();
-            match s.input.active_url_field {
-                UrlInputField::SwaggerUrl => {
-                    s.input.url_input.clear();
-                    log_debug("Cleared swagger URL input");
-                }
-                UrlInputField::BaseUrl => {
-                    s.input.base_url_input.clear();
-                    log_debug("Cleared base URL input");
-                }
-            }
-        }
-
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+W: Delete word backwards
             let mut s = state.write().unwrap();
@@ -262,8 +247,8 @@ pub fn handle_token_input(
             let mut s = state.write().unwrap();
             s.input.token_input.pop();
         }
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+U: Clear entire token
+        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+L: Clear entire token (consistent with other inputs)
             let mut s = state.write().unwrap();
             s.input.token_input.clear();
             log_debug("Cleared token input");
@@ -457,8 +442,8 @@ pub fn handle_body_input(
             s.input.body_input.pop();
         }
 
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+U: Clear entire body
+        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+L: Clear entire body (consistent with other inputs)
             let mut s = state.write().unwrap();
             s.input.body_input.clear();
             log_debug("Cleared body input");

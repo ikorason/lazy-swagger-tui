@@ -17,10 +17,6 @@ pub enum AppAction {
     NavigateParamUp,
     NavigateParamDown,
 
-    // Scrolling actions
-    ScrollUp,
-    ScrollDown,
-
     // View mode actions
     ToggleViewMode,
     ToggleGroupExpanded(String), // Toggle expand/collapse for a group
@@ -84,8 +80,6 @@ pub enum AppAction {
 
     // State reset actions
     ResetParamIndex,
-    ResetResponseScroll,
-    ResetHeadersScroll,
 
     // Body section actions
     ToggleBodySection,
@@ -163,34 +157,6 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             state.ui.selected_param_index = state.ui.selected_param_index.saturating_add(1);
         }
 
-        // Scrolling
-        AppAction::ScrollUp => {
-            match state.ui.active_detail_tab {
-                DetailTab::Response => {
-                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_sub(5);
-                }
-                DetailTab::Headers => {
-                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_sub(5);
-                }
-                DetailTab::Endpoint | DetailTab::Request => {
-                    // No scrolling for these tabs
-                }
-            }
-        }
-        AppAction::ScrollDown => {
-            match state.ui.active_detail_tab {
-                DetailTab::Response => {
-                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_add(5);
-                }
-                DetailTab::Headers => {
-                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_add(5);
-                }
-                DetailTab::Endpoint | DetailTab::Request => {
-                    // No scrolling for these tabs
-                }
-            }
-        }
-
         // View mode
         AppAction::ToggleViewMode => {
             use crate::types::ViewMode;
@@ -232,7 +198,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::EnterSearchMode => {
             state.input.mode = InputMode::Searching;
-            state.search.query.clear();
+            if state.search.query.is_empty() {
+                state.search.query.clear();
+            }
         }
         AppAction::ExitSearchMode => {
             state.input.mode = InputMode::Normal;
@@ -393,12 +361,6 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ResetParamIndex => {
             state.ui.selected_param_index = 0;
         }
-        AppAction::ResetResponseScroll => {
-            state.ui.response_body_scroll = 0;
-        }
-        AppAction::ResetHeadersScroll => {
-            state.ui.headers_scroll = 0;
-        }
 
         // Body section
         AppAction::ToggleBodySection => {
@@ -442,8 +404,6 @@ mod tests {
                 expanded_groups: HashSet::new(),
                 panel_focus: PanelFocus::EndpointsList,
                 active_detail_tab: DetailTab::Endpoint,
-                response_body_scroll: 0,
-                headers_scroll: 0,
                 selected_param_index: 0,
                 body_section_expanded: true,
             },
@@ -547,23 +507,6 @@ mod tests {
             &mut state,
         );
         assert!(state.ui.expanded_groups.is_empty());
-    }
-
-    #[test]
-    fn test_scroll_actions() {
-        let mut state = create_test_state();
-        state.ui.panel_focus = PanelFocus::Details;
-        state.ui.active_detail_tab = DetailTab::Response;
-        state.ui.response_body_scroll = 10;
-
-        apply_action(AppAction::ScrollDown, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 15);
-
-        apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 10);
-
-        apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 5);
     }
 
     #[test]

@@ -70,7 +70,7 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(input, chunks[1]);
 
     // Help text
-    let help = Paragraph::new("Enter: Save  |  Esc: Cancel")
+    let help = Paragraph::new("Enter: Save  |  Ctrl+L: Clear  |  Esc: Cancel")
         .style(Style::default().fg(Color::Rgb(150, 150, 150)))
         .alignment(Alignment::Center);
     frame.render_widget(help, chunks[3]);
@@ -313,7 +313,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(body_text, chunks[1]);
 
     // Help text
-    let help = Paragraph::new("Enter: Confirm & Format  |  Esc: Cancel  |  Ctrl+U: Clear")
+    let help = Paragraph::new("Enter: Confirm & Format  |  Esc: Cancel  |  Ctrl+L: Clear")
         .style(Style::default().fg(Color::Rgb(150, 150, 150)))
         .alignment(Alignment::Center);
     frame.render_widget(help, chunks[3]);

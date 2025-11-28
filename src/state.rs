@@ -20,8 +20,6 @@ pub struct UiState {
     pub expanded_groups: HashSet<String>,
     pub panel_focus: PanelFocus,
     pub active_detail_tab: DetailTab,
-    pub response_body_scroll: usize,
-    pub headers_scroll: usize,
     pub selected_param_index: usize,
     pub body_section_expanded: bool,
 }
@@ -80,8 +78,6 @@ impl Default for AppState {
                 expanded_groups: HashSet::new(),
                 panel_focus: PanelFocus::EndpointsList,
                 active_detail_tab: DetailTab::Endpoint,
-                response_body_scroll: 0,
-                headers_scroll: 0,
                 selected_param_index: 0,
                 body_section_expanded: true,
             },

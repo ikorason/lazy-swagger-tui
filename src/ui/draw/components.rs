@@ -85,10 +85,10 @@ pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
     let footer_text = match view_mode {
         ViewMode::Flat => {
-            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Group ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle | g:Group ,:URL a:Auth q:Quit"
         }
         ViewMode::Grouped => {
-            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle Ctrl+d/u:Scroll | g:Ungroup ,:URL a:Auth q:Quit"
+            "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle | g:Ungroup ,:URL a:Auth q:Quit"
         }
     };
 

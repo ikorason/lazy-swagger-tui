@@ -81,7 +81,6 @@ When configuring URLs (press `,`):
 
 - Use `Tab` to switch between Swagger URL and Base URL fields
 - Use `Ctrl+L` to clear the current field
-- Use `Ctrl+U` to clear the entire line
 - Use `Ctrl+W` to delete the previous word
 - Press `Enter` to confirm, `Esc` to cancel
 
@@ -132,7 +131,6 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | `j` / `k` | Navigate up/down through endpoints |
 | `↑` / `↓` | Navigate up/down (alternative) |
-| `Ctrl+d` / `Ctrl+u` | Scroll half-page down/up in detail panels |
 | `Space` | Execute selected endpoint or toggle group |
 
 ### Search Mode
@@ -141,8 +139,9 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | Type | Filter endpoints in real-time |
 | `Backspace` | Delete last character |
-| `Ctrl+U` | Clear entire search query |
-| `Enter` / `Esc` | Exit search mode (keeps filter active) |
+| `Ctrl+L` | Clear entire search query |
+| `Enter` | Exit search mode (keeps filter active) |
+| `Esc` | Exit search mode and clear filter |
 
 **Search matches**: path, method, summary, and tags (case-insensitive)
 
@@ -152,20 +151,19 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | `Tab` / `Shift+Tab` | Switch between tabs |
 | `Space` | Execute currently selected endpoint |
-| `Ctrl+d` / `Ctrl+u` | Scroll content down/up in active tab |
 | `j` / `k` | Navigate parameters (Request tab only) |
 | `e` | Edit selected parameter (Request tab only) |
 | `b` | Edit JSON body (Request tab, POST/PUT/PATCH only) |
 | `x` | Toggle body section collapse/expand (Request tab only) |
 | `Enter` | Confirm edit (parameter or body) |
 | `Esc` | Cancel edit |
-| `Ctrl+U` | Clear body (while editing body) |
+| `Ctrl+L` | Clear body (while editing body) |
 
 ## Tips & Tricks
 
 - **Quick Testing**: Select an endpoint and press `Space` to execute. Press `Space` again in the Details panel to re-execute.
 - **Panel Switching**: Press `1` to jump to Endpoints panel, `2` to jump to Details panel. Or use `Tab`/`Shift+Tab` to cycle through.
-- **Search**: Press `/` and start typing to filter endpoints. The filter stays active even after you exit search mode with `Esc`. Clear with `Ctrl+L`.
+- **Search**: Press `/` and start typing to filter endpoints. Press `Enter` to exit and keep the filter active, or `Esc` to exit and clear the filter. You can also clear the filter anytime with `Ctrl+L`.
 - **Parameters**: Navigate to the Request tab to configure path and query parameters before executing endpoints. Press `e` to edit, `Enter` to confirm.
 - **JSON Body Editing**: For POST/PUT/PATCH endpoints, press `b` in the Request tab to open the body editor. Type or paste your JSON, press `Enter` to auto-format and save. Invalid JSON is kept as-is without errors.
 - **Body Preview**: The Request tab shows a collapsible body preview (first 5 lines). Press `x` to toggle collapse/expand.
