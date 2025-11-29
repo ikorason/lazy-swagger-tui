@@ -5,7 +5,8 @@
 //! - Confirming parameter edits
 //! - Ensuring request configs exist
 
-use super::helpers::log_debug;
+use super::helpers::{apply, log_debug};
+use crate::actions::AppAction;
 use crate::state::AppState;
 use crate::types::{RequestConfig, RequestEditMode};
 use std::sync::{Arc, RwLock};
@@ -72,18 +73,24 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
     }; // state_read is dropped here
 
     // Now we can safely acquire write lock with the data we collected
-    if let Some((param_name, endpoint_path, current_value)) = edit_data {
-        let mut s = state.write().unwrap();
-
+    if let Some((param_name, endpoint_path, _current_value)) = edit_data {
         // Ensure config exists
-        s.request
-            .configs
-            .entry(endpoint_path)
-            .or_insert_with(RequestConfig::default);
+        {
+            let mut s = state.write().unwrap();
+            s.request
+                .configs
+                .entry(endpoint_path.clone())
+                .or_insert_with(RequestConfig::default);
+        }
 
-        // Enter edit mode
-        s.request.edit_mode = RequestEditMode::Editing(param_name.clone());
-        s.request.param_edit_buffer = current_value;
+        // Enter edit mode using action
+        apply(
+            state.clone(),
+            AppAction::StartEditingParameter {
+                param_name: param_name.clone(),
+                endpoint_path,
+            },
+        );
 
         log_debug(&format!("Editing parameter: {}", param_name));
     }
@@ -91,56 +98,39 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
 
 /// Confirm parameter edit and save the value
 pub fn handle_request_param_confirm(selected_index: usize, state: Arc<RwLock<AppState>>) {
-    let state_read = state.read().unwrap();
+    let (is_editing, endpoint_path) = {
+        let state_read = state.read().unwrap();
 
-    // Get the param name we're editing
-    if let RequestEditMode::Editing(param_name) = &state_read.request.edit_mode {
-        let param_name = param_name.clone();
-        let new_value = state_read.request.param_edit_buffer.clone();
+        // Check if we're editing
+        let is_editing = matches!(state_read.request.edit_mode, RequestEditMode::Editing(_));
 
-        // Get currently selected endpoint
-        let selected_endpoint = state_read.get_selected_endpoint(selected_index);
+        // Get currently selected endpoint path
+        let endpoint_path = state_read
+            .get_selected_endpoint(selected_index)
+            .map(|endpoint| endpoint.path.clone());
 
-        if let Some(endpoint) = selected_endpoint {
-            let endpoint_path = endpoint.path.clone();
+        (is_editing, endpoint_path)
+    };
 
-            // Determine which parameter we're editing by finding it in the endpoint
-            let param_location = endpoint
-                .parameters
-                .iter()
-                .find(|p| p.name == param_name)
-                .map(|p| p.location.clone());
+    if is_editing {
+        if let Some(path) = endpoint_path {
+            // Confirm the edit using action
+            apply(
+                state.clone(),
+                AppAction::ConfirmParameterEdit {
+                    endpoint_path: path,
+                },
+            );
 
-            drop(state_read);
-            let mut s = state.write().unwrap();
+            let param_info = {
+                let s = state.read().unwrap();
+                format!(
+                    "Confirmed parameter edit (now viewing mode: {})",
+                    matches!(s.request.edit_mode, RequestEditMode::Viewing)
+                )
+            };
 
-            // Update the request config in the correct HashMap
-            let config = s
-                .request
-                .configs
-                .entry(endpoint_path)
-                .or_insert_with(RequestConfig::default);
-
-            if let Some(location) = param_location {
-                if location == "path" {
-                    config
-                        .path_params
-                        .insert(param_name.clone(), new_value.clone());
-                } else if location == "query" {
-                    config
-                        .query_params
-                        .insert(param_name.clone(), new_value.clone());
-                }
-            }
-
-            // Exit edit mode
-            s.request.edit_mode = RequestEditMode::Viewing;
-            s.request.param_edit_buffer.clear();
-
-            log_debug(&format!(
-                "Confirmed parameter {}: {}",
-                param_name, new_value
-            ));
+            log_debug(&param_info);
         }
     }
 }

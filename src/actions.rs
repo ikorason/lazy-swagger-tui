@@ -414,6 +414,9 @@ mod tests {
                 active_detail_tab: DetailTab::Endpoint,
                 selected_param_index: 0,
                 body_section_expanded: true,
+                response_scroll: 0,
+                response_selected_line: 0,
+                yank_flash: false,
             },
             input: InputState {
                 mode: InputMode::Normal,

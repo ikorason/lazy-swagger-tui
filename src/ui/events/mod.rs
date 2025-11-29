@@ -28,7 +28,7 @@ mod search;
 mod yank;
 
 // Re-export public items
-pub use helpers::{apply, apply_or_char, log_debug};
+pub use helpers::{apply, apply_or_char, is_editing, log_debug};
 
 use crate::actions::AppAction;
 use crate::state::AppState;
@@ -98,33 +98,27 @@ impl EventHandler {
                         // QUIT
                         KeyCode::Char('q') => {
                             // Don't quit if we're editing a parameter
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                            if !is_editing(&state) {
+                                // Not editing - quit the app
+                                self.should_quit = true;
+                            } else {
                                 // We're editing - treat 'q' as character input
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('q');
-                            } else {
-                                // Not editing - quit the app
-                                self.should_quit = true;
                             }
                         }
                         // nav down
                         KeyCode::Char('j') => {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            // If editing a parameter, treat as character input
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('j');
                             } else {
-                                // Not editing - handle navigation
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
+
+                                // Handle navigation
                                 match panel {
                                     PanelFocus::EndpointsList => {
                                         // Navigate down in endpoints list
@@ -151,18 +145,16 @@ impl EventHandler {
                         }
                         // nav up
                         KeyCode::Char('k') => {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            // If editing a parameter, treat as character input
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('k');
                             } else {
-                                // Not editing - handle navigation
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
+
+                                // Handle navigation
                                 match panel {
                                     PanelFocus::EndpointsList => {
                                         // Navigate up in endpoints list
@@ -186,62 +178,48 @@ impl EventHandler {
                         }
                         // handle auth dialog
                         KeyCode::Char('a') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat 'a' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('a');
                             } else {
-                                // Not editing - auth dialog
                                 modals::handle_auth_dialog(state.clone());
                             }
                         }
                         // handle body editor
                         KeyCode::Char('b') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-
-                            // Check if current endpoint supports body
-                            let supports_body = state_read
-                                .get_selected_endpoint(self.selected_index)
-                                .map(|ep| ep.supports_body())
-                                .unwrap_or(false);
-
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing a parameter - treat 'b' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('b');
-                            } else if panel == PanelFocus::Details
-                                && active_tab == DetailTab::Request
-                                && supports_body
-                            {
-                                // Open body editor
-                                modals::handle_body_dialog(state.clone(), self.selected_index);
+                            } else {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                let supports_body = state_read
+                                    .get_selected_endpoint(self.selected_index)
+                                    .map(|ep| ep.supports_body())
+                                    .unwrap_or(false);
+                                drop(state_read);
+
+                                if panel == PanelFocus::Details
+                                    && active_tab == DetailTab::Request
+                                    && supports_body
+                                {
+                                    modals::handle_body_dialog(state.clone(), self.selected_index);
+                                }
                             }
                         }
                         // edit param
                         KeyCode::Char('e') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat 'e' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('e');
                             } else {
-                                // Only handle if on Details panel and Request tab
-                                if panel == PanelFocus::Details && active_tab == DetailTab::Request
-                                {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
+
+                                if panel == PanelFocus::Details && active_tab == DetailTab::Request {
                                     parameters::handle_request_param_edit(
                                         self.selected_index,
                                         state.clone(),
@@ -251,12 +229,7 @@ impl EventHandler {
                         }
                         // toggle view - list <-> grouped
                         KeyCode::Char('g') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat 'g' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('g');
                             } else {
@@ -269,12 +242,7 @@ impl EventHandler {
                         }
                         // config url
                         KeyCode::Char(',') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat ',' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push(',');
                             } else {
@@ -287,12 +255,7 @@ impl EventHandler {
                         }
                         // search endpoints
                         KeyCode::Char('/') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat '/' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('/');
                             } else {
@@ -301,47 +264,41 @@ impl EventHandler {
                         }
                         // toggle body section
                         KeyCode::Char('x') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-
-                            let supports_body = state_read
-                                .get_selected_endpoint(self.selected_index)
-                                .map(|ep| ep.supports_body())
-                                .unwrap_or(false);
-
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat 'x' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('x');
-                            } else if panel == PanelFocus::Details
-                                && active_tab == DetailTab::Request
-                                && supports_body
-                            {
-                                // Toggle body section
-                                apply(state.clone(), AppAction::ToggleBodySection);
+                            } else {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                let supports_body = state_read
+                                    .get_selected_endpoint(self.selected_index)
+                                    .map(|ep| ep.supports_body())
+                                    .unwrap_or(false);
+                                drop(state_read);
+
+                                if panel == PanelFocus::Details
+                                    && active_tab == DetailTab::Request
+                                    && supports_body
+                                {
+                                    apply(state.clone(), AppAction::ToggleBodySection);
+                                }
                             }
                         }
                         // yank (copy) current line
                         KeyCode::Char('y') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat 'y' as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push('y');
-                            } else if panel == PanelFocus::Details
-                                && active_tab == DetailTab::Response
-                            {
-                                // Yank current response line
-                                yank::handle_yank_response_line(state.clone());
+                            } else {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
+
+                                if panel == PanelFocus::Details && active_tab == DetailTab::Response {
+                                    yank::handle_yank_response_line(state.clone());
+                                }
                             }
                         }
                         // switch to endpoints panel
@@ -395,36 +352,16 @@ impl EventHandler {
                         }
                         // space  - execute & expand
                         KeyCode::Char(' ') => {
-                            let state_read = state.read().unwrap();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            let panel = state_read.ui.panel_focus.clone();
-                            drop(state_read);
-
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // We're editing - treat space as character input
+                            if is_editing(&state) {
                                 let mut s = state.write().unwrap();
                                 s.request.param_edit_buffer.push(' ');
                             } else {
-                                match panel {
-                                    PanelFocus::EndpointsList => {
-                                        // Space executes request or expands group
-                                        execution::handle_enter(
-                                            &mut self.selected_index,
-                                            state.clone(),
-                                            list_state,
-                                            base_url.clone(),
-                                        );
-                                    }
-                                    PanelFocus::Details => {
-                                        // Space in Details panel: Execute current endpoint again
-                                        execution::handle_enter(
-                                            &mut self.selected_index,
-                                            state.clone(),
-                                            list_state,
-                                            base_url.clone(),
-                                        );
-                                    }
-                                }
+                                execution::handle_enter(
+                                    &mut self.selected_index,
+                                    state.clone(),
+                                    list_state,
+                                    base_url.clone(),
+                                );
                             }
                         }
                         // enter - param confirm
@@ -487,16 +424,12 @@ impl EventHandler {
 
                         // keep arrow keys for accessibility (optional)
                         KeyCode::Up => {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
+                            if !is_editing(&state) {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
 
-                            // Don't handle navigation during parameter editing
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // Do nothing - let user type normally
-                            } else {
                                 use crate::types::PanelFocus;
                                 match panel {
                                     PanelFocus::EndpointsList => {
@@ -516,16 +449,12 @@ impl EventHandler {
                         }
 
                         KeyCode::Down => {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            let active_tab = state_read.ui.active_detail_tab.clone();
-                            let edit_mode = state_read.request.edit_mode.clone();
-                            drop(state_read);
+                            if !is_editing(&state) {
+                                let state_read = state.read().unwrap();
+                                let panel = state_read.ui.panel_focus.clone();
+                                let active_tab = state_read.ui.active_detail_tab.clone();
+                                drop(state_read);
 
-                            // Don't handle navigation during parameter editing
-                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
-                                // Do nothing - let user type normally
-                            } else {
                                 use crate::types::PanelFocus;
                                 match panel {
                                     PanelFocus::EndpointsList => {
