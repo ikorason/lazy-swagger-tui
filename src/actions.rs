@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::editor::BodyEditor;
 use crate::state::AppState;
 use crate::types::{DetailTab, InputMode, PanelFocus, RequestEditMode, UrlInputField};
 
@@ -17,10 +19,6 @@ pub enum AppAction {
     NavigateParamUp,
     NavigateParamDown,
 
-    // Scrolling actions
-    ScrollUp,
-    ScrollDown,
-
     // View mode actions
     ToggleViewMode,
     ToggleGroupExpanded(String), // Toggle expand/collapse for a group
@@ -35,6 +33,8 @@ pub enum AppAction {
     ExitTokenInputMode,
     EnterSearchMode,
     ExitSearchMode,
+    EnterBodyInputMode,
+    ExitBodyInputMode,
     EnterConfirmClearTokenMode,
     ExitConfirmClearTokenMode,
     SetActiveUrlField(UrlInputField),
@@ -44,14 +44,17 @@ pub enum AppAction {
     AppendToBaseUrlInput(String),
     AppendToTokenInput(String),
     AppendToSearchQuery(String),
+    AppendToBodyInput(String),
     ClearUrlInput,
     ClearBaseUrlInput,
     ClearTokenInput,
     ClearSearchQuery,
+    ClearBodyInput,
     BackspaceUrlInput,
     BackspaceBaseUrlInput,
     BackspaceTokenInput,
     BackspaceSearchQuery,
+    BackspaceBodyInput,
     DeleteWordUrlInput,
     DeleteWordBaseUrlInput,
     DeleteWordTokenInput,
@@ -79,8 +82,9 @@ pub enum AppAction {
 
     // State reset actions
     ResetParamIndex,
-    ResetResponseScroll,
-    ResetHeadersScroll,
+
+    // Body section actions
+    ToggleBodySection,
 }
 
 /// Apply an action to the application state
@@ -100,14 +104,16 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::NavigateToTab(tab) => {
             state.ui.active_detail_tab = tab;
+            // Reset response scroll when navigating to/from Response tab
+            state.ui.response_scroll = 0;
+            state.ui.response_selected_line = 0;
         }
         AppAction::NavigateTabForward => {
             use DetailTab::*;
             match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
+                    // Keep the current tab when switching to Details panel
                     state.ui.panel_focus = PanelFocus::Details;
-                    state.ui.active_detail_tab = Endpoint;
-                    state.ui.selected_param_index = 0;
                 }
                 (PanelFocus::Details, Endpoint) => {
                     state.ui.active_detail_tab = Request;
@@ -118,6 +124,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                 }
                 (PanelFocus::Details, Headers) => {
                     state.ui.active_detail_tab = Response;
+                    state.ui.response_scroll = 0;
+                    state.ui.response_selected_line = 0;
                 }
                 (PanelFocus::Details, Response) => {
                     state.ui.panel_focus = PanelFocus::EndpointsList;
@@ -129,8 +137,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             use DetailTab::*;
             match (&state.ui.panel_focus, &state.ui.active_detail_tab) {
                 (PanelFocus::EndpointsList, _) => {
+                    // Keep the current tab when switching to Details panel
                     state.ui.panel_focus = PanelFocus::Details;
-                    state.ui.active_detail_tab = Response;
                 }
                 (PanelFocus::Details, Request) => {
                     state.ui.active_detail_tab = Endpoint;
@@ -138,6 +146,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                 }
                 (PanelFocus::Details, Response) => {
                     state.ui.active_detail_tab = Headers;
+                    state.ui.response_scroll = 0;
+                    state.ui.response_selected_line = 0;
                 }
                 (PanelFocus::Details, Headers) => {
                     state.ui.active_detail_tab = Request;
@@ -153,34 +163,6 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::NavigateParamDown => {
             state.ui.selected_param_index = state.ui.selected_param_index.saturating_add(1);
-        }
-
-        // Scrolling
-        AppAction::ScrollUp => {
-            match state.ui.active_detail_tab {
-                DetailTab::Response => {
-                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_sub(5);
-                }
-                DetailTab::Headers => {
-                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_sub(5);
-                }
-                DetailTab::Endpoint | DetailTab::Request => {
-                    // No scrolling for these tabs
-                }
-            }
-        }
-        AppAction::ScrollDown => {
-            match state.ui.active_detail_tab {
-                DetailTab::Response => {
-                    state.ui.response_body_scroll = state.ui.response_body_scroll.saturating_add(5);
-                }
-                DetailTab::Headers => {
-                    state.ui.headers_scroll = state.ui.headers_scroll.saturating_add(5);
-                }
-                DetailTab::Endpoint | DetailTab::Request => {
-                    // No scrolling for these tabs
-                }
-            }
         }
 
         // View mode
@@ -224,10 +206,20 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::EnterSearchMode => {
             state.input.mode = InputMode::Searching;
-            state.search.query.clear();
+            if state.search.query.is_empty() {
+                state.search.query.clear();
+            }
         }
         AppAction::ExitSearchMode => {
             state.input.mode = InputMode::Normal;
+        }
+        AppAction::EnterBodyInputMode => {
+            state.input.mode = InputMode::EnteringBody;
+            // Body input is pre-populated by caller
+        }
+        AppAction::ExitBodyInputMode => {
+            state.input.mode = InputMode::Normal;
+            state.input.body_editor.clear();
         }
         AppAction::EnterConfirmClearTokenMode => {
             state.input.mode = InputMode::ConfirmClearToken;
@@ -252,6 +244,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::AppendToSearchQuery(text) => {
             state.search.query.push_str(&text);
         }
+        AppAction::AppendToBodyInput(text) => {
+            state.input.body_editor.insert_str(&text);
+        }
         AppAction::ClearUrlInput => {
             state.input.url_input.clear();
         }
@@ -264,6 +259,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ClearSearchQuery => {
             state.search.query.clear();
         }
+        AppAction::ClearBodyInput => {
+            state.input.body_editor.clear();
+        }
         AppAction::BackspaceUrlInput => {
             state.input.url_input.pop();
         }
@@ -275,6 +273,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::BackspaceSearchQuery => {
             state.search.query.pop();
+        }
+        AppAction::BackspaceBodyInput => {
+            state.input.body_editor.delete_char_before_cursor();
         }
         AppAction::DeleteWordUrlInput => {
             delete_word(&mut state.input.url_input);
@@ -368,11 +369,10 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         AppAction::ResetParamIndex => {
             state.ui.selected_param_index = 0;
         }
-        AppAction::ResetResponseScroll => {
-            state.ui.response_body_scroll = 0;
-        }
-        AppAction::ResetHeadersScroll => {
-            state.ui.headers_scroll = 0;
+
+        // Body section
+        AppAction::ToggleBodySection => {
+            state.ui.body_section_expanded = !state.ui.body_section_expanded;
         }
     }
 }
@@ -412,9 +412,8 @@ mod tests {
                 expanded_groups: HashSet::new(),
                 panel_focus: PanelFocus::EndpointsList,
                 active_detail_tab: DetailTab::Endpoint,
-                response_body_scroll: 0,
-                headers_scroll: 0,
                 selected_param_index: 0,
+                body_section_expanded: true,
             },
             input: InputState {
                 mode: InputMode::Normal,
@@ -422,6 +421,8 @@ mod tests {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
+                body_editor: BodyEditor::new(),
+                body_validation_error: None,
             },
             request: RequestState {
                 auth: AuthState::new(),
@@ -487,6 +488,42 @@ mod tests {
     }
 
     #[test]
+    fn test_tab_navigation_preserves_active_tab() {
+        let mut state = create_test_state();
+
+        // Start on Request tab in Details panel
+        state.ui.panel_focus = PanelFocus::Details;
+        state.ui.active_detail_tab = DetailTab::Request;
+
+        // Navigate to EndpointsList
+        apply_action(
+            AppAction::NavigateToPanel(PanelFocus::EndpointsList),
+            &mut state,
+        );
+        assert_eq!(state.ui.panel_focus, PanelFocus::EndpointsList);
+
+        // Tab back to Details - should stay on Request tab
+        apply_action(AppAction::NavigateTabForward, &mut state);
+        assert_eq!(state.ui.panel_focus, PanelFocus::Details);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Request);
+
+        // Switch to Headers tab
+        apply_action(AppAction::NavigateTabForward, &mut state);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
+
+        // Navigate to EndpointsList with '1'
+        apply_action(
+            AppAction::NavigateToPanel(PanelFocus::EndpointsList),
+            &mut state,
+        );
+
+        // Shift+Tab back to Details - should stay on Headers tab
+        apply_action(AppAction::NavigateTabBackward, &mut state);
+        assert_eq!(state.ui.panel_focus, PanelFocus::Details);
+        assert_eq!(state.ui.active_detail_tab, DetailTab::Headers);
+    }
+
+    #[test]
     fn test_toggle_view_mode() {
         let mut state = create_test_state();
         assert_eq!(state.ui.view_mode, ViewMode::Flat);
@@ -515,23 +552,6 @@ mod tests {
             &mut state,
         );
         assert!(state.ui.expanded_groups.is_empty());
-    }
-
-    #[test]
-    fn test_scroll_actions() {
-        let mut state = create_test_state();
-        state.ui.panel_focus = PanelFocus::Details;
-        state.ui.active_detail_tab = DetailTab::Response;
-        state.ui.response_body_scroll = 10;
-
-        apply_action(AppAction::ScrollDown, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 15);
-
-        apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 10);
-
-        apply_action(AppAction::ScrollUp, &mut state);
-        assert_eq!(state.ui.response_body_scroll, 5);
     }
 
     #[test]

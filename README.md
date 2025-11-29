@@ -11,6 +11,7 @@ A Ratatui-based terminal UI for testing ASP.NET Core APIs directly from your ter
 - 📊 Grouped endpoint views by tags
 - 📑 Tab-based details panel (Endpoint, Request, Headers, Response)
 - 🌐 **Full HTTP method support** - GET, POST, PUT, PATCH, DELETE
+- 📝 **JSON body editing** - Multi-line editor with auto-formatting for POST/PUT/PATCH requests
 - ⚡ Fast, keyboard-driven workflow
 
 ## Quick Start
@@ -40,6 +41,7 @@ Quickly find endpoints with live search:
 4. Press **`Ctrl+L`** to clear the filter
 
 **Search matches against:**
+
 - Endpoint paths (e.g., `/api/users`)
 - HTTP methods (GET, POST, etc.)
 - Endpoint summaries/descriptions
@@ -56,14 +58,6 @@ lazy swagger tui supports Bearer token authentication:
 - Tokens are stored in memory only (not persisted to disk)
 - The token is automatically included in all API requests as: `Authorization: Bearer <your-token>`
 
-**Getting a Token:**
-Most APIs require you to authenticate first to get a token:
-
-1. Use Swagger UI or another tool to call your login endpoint
-2. Copy the token from the response
-3. Press `a` in lazy swagger tui and paste your token
-4. The token will be included in all subsequent requests
-
 ## Configuration
 
 Configuration is stored in `~/.config/lazy-swagger-tui/config.toml`:
@@ -75,6 +69,7 @@ base_url = "http://localhost:5000"
 ```
 
 **Important**: Both URLs are required and independent:
+
 - **Swagger URL**: Used to fetch the list of available endpoints from your API documentation
 - **Base URL**: Used as the base for all actual API requests
 
@@ -83,9 +78,9 @@ You can edit this file directly or press `,` in the app to update URLs.
 ### URL Configuration Modal
 
 When configuring URLs (press `,`):
+
 - Use `Tab` to switch between Swagger URL and Base URL fields
 - Use `Ctrl+L` to clear the current field
-- Use `Ctrl+U` to clear the entire line
 - Use `Ctrl+W` to delete the previous word
 - Press `Enter` to confirm, `Esc` to cancel
 
@@ -97,7 +92,7 @@ When configuring URLs (press `,`):
 - **Left Panel**: Endpoints list (grouped by tags or flat view)
 - **Right Panel**: Details with four tabs
   - **Endpoint Tab**: Shows method, path, summary, and tags
-  - **Request Tab**: Configure path/query parameters (press `e` to edit)
+  - **Request Tab**: Configure path/query parameters and JSON body (press `e` to edit params, `b` for body)
   - **Headers Tab**: Displays response headers
   - **Response Tab**: Shows response body, status, and duration
 
@@ -136,7 +131,6 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | `j` / `k` | Navigate up/down through endpoints |
 | `↑` / `↓` | Navigate up/down (alternative) |
-| `Ctrl+d` / `Ctrl+u` | Scroll half-page down/up in detail panels |
 | `Space` | Execute selected endpoint or toggle group |
 
 ### Search Mode
@@ -145,8 +139,9 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | Type | Filter endpoints in real-time |
 | `Backspace` | Delete last character |
-| `Ctrl+U` | Clear entire search query |
-| `Enter` / `Esc` | Exit search mode (keeps filter active) |
+| `Ctrl+L` | Clear entire search query |
+| `Enter` | Exit search mode (keeps filter active) |
+| `Esc` | Exit search mode and clear filter |
 
 **Search matches**: path, method, summary, and tags (case-insensitive)
 
@@ -156,24 +151,27 @@ Endpoints Panel → Endpoint Tab → Request Tab → Headers Tab → Response Ta
 |-----|--------|
 | `Tab` / `Shift+Tab` | Switch between tabs |
 | `Space` | Execute currently selected endpoint |
-| `Ctrl+d` / `Ctrl+u` | Scroll content down/up in active tab |
 | `j` / `k` | Navigate parameters (Request tab only) |
 | `e` | Edit selected parameter (Request tab only) |
-| `Enter` | Confirm parameter edit |
-| `Esc` | Cancel parameter edit |
+| `b` | Edit JSON body (Request tab, POST/PUT/PATCH only) |
+| `x` | Toggle body section collapse/expand (Request tab only) |
+| `Enter` | Confirm edit (parameter or body) |
+| `Esc` | Cancel edit |
+| `Ctrl+L` | Clear body (while editing body) |
 
 ## Tips & Tricks
 
 - **Quick Testing**: Select an endpoint and press `Space` to execute. Press `Space` again in the Details panel to re-execute.
 - **Panel Switching**: Press `1` to jump to Endpoints panel, `2` to jump to Details panel. Or use `Tab`/`Shift+Tab` to cycle through.
-- **Search**: Press `/` and start typing to filter endpoints. The filter stays active even after you exit search mode with `Esc`. Clear with `Ctrl+L`.
+- **Search**: Press `/` and start typing to filter endpoints. Press `Enter` to exit and keep the filter active, or `Esc` to exit and clear the filter. You can also clear the filter anytime with `Ctrl+L`.
 - **Parameters**: Navigate to the Request tab to configure path and query parameters before executing endpoints. Press `e` to edit, `Enter` to confirm.
+- **JSON Body Editing**: For POST/PUT/PATCH endpoints, press `b` in the Request tab to open the body editor. Type or paste your JSON, press `Enter` to auto-format and save. Invalid JSON is kept as-is without errors.
+- **Body Preview**: The Request tab shows a collapsible body preview (first 5 lines). Press `x` to toggle collapse/expand.
 - **Parameter-less Endpoints**: Endpoints without path parameters can be executed immediately with `Space` - no configuration needed!
 - **Compare Responses**: Switch between Headers and Response tabs to inspect different aspects of the API response.
-- **Paste Support**: When entering tokens, URLs, or parameters, you can paste large amounts of text - the app handles it efficiently.
+- **Paste Support**: When entering tokens, URLs, parameters, or JSON bodies, you can paste large amounts of text - the app handles it efficiently.
 - **Grouped Navigation**: In grouped view, press `Space` on a group header to expand/collapse it.
 - **URL Configuration**: The Swagger URL and Base URL are completely independent - set them both correctly for your API.
-- **All Methods**: POST, PUT, and PATCH requests currently send empty JSON body `{}` - body editing coming soon!
 
 ## Building from Source
 
@@ -185,12 +183,10 @@ The binary will be available at `target/release/lazy-swagger-tui`.
 
 ## Roadmap
 
-- [x] Search/filter endpoints
-- [x] Support for all HTTP methods (GET, POST, PUT, PATCH, DELETE)
-- [x] Path and query parameter editing
-- [ ] JSON body editing for POST/PUT/PATCH requests
+- [x] JSON body editing for POST/PUT/PATCH requests
+- [ ] Parse Swagger requestBody schemas with `$ref` resolution
+- [ ] Generate example values from schema (like Swagger UI)
 - [ ] Request history and favorites
 - [ ] Environment variable support
 - [ ] Export responses to files
-- [ ] JSON syntax highlighting
-- [ ] Save/load request configurations
+- [ ] JSON syntax highlighting in body editor

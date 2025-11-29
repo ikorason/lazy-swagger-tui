@@ -70,7 +70,7 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
     frame.render_widget(input, chunks[1]);
 
     // Help text
-    let help = Paragraph::new("Enter: Save  |  Esc: Cancel")
+    let help = Paragraph::new("Enter: Save  |  Ctrl+L: Clear  |  Esc: Cancel")
         .style(Style::default().fg(Color::Rgb(150, 150, 150)))
         .alignment(Alignment::Center);
     frame.render_widget(help, chunks[3]);
@@ -253,4 +253,97 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     .style(Style::default().fg(Color::Rgb(150, 150, 150)))
     .alignment(Alignment::Center);
     frame.render_widget(help, chunks[7]);
+}
+
+/// Render the JSON body input modal for POST/PUT/PATCH requests
+pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
+    let area = frame.area();
+
+    // Larger modal for multi-line JSON editing
+    let modal_width = (area.width as f32 * 0.8).min(100.0) as u16;
+    let modal_height = (area.height as f32 * 0.7).min(30.0) as u16;
+    let modal_x = (area.width.saturating_sub(modal_width)) / 2;
+    let modal_y = (area.height.saturating_sub(modal_height)) / 2;
+
+    let modal_area = Rect {
+        x: modal_x,
+        y: modal_y,
+        width: modal_width,
+        height: modal_height,
+    };
+
+    frame.render_widget(Clear, modal_area);
+
+    let block = Block::default()
+        .title(" Edit Request Body (JSON) ")
+        .borders(Borders::ALL)
+        .border_style(
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    // Adjust layout based on whether there's an error
+    let has_error = state.input.body_validation_error.is_some();
+    let constraints = if has_error {
+        vec![
+            Constraint::Length(1), // Label with cursor position
+            Constraint::Min(5),    // Body content (grows)
+            Constraint::Length(2), // Error message (2 lines with padding)
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Help
+        ]
+    } else {
+        vec![
+            Constraint::Length(1), // Label with cursor position
+            Constraint::Min(5),    // Body content (grows)
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Help
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(inner);
+
+    // Label with cursor position
+    let cursor_pos = state.input.body_editor.cursor_position_display();
+    let label = Paragraph::new(format!("JSON Body: {}", cursor_pos))
+        .style(Style::default().fg(Color::LightGreen));
+    frame.render_widget(label, chunks[0]);
+
+    // Body input - multi-line with cursor marker
+    let body_content = state.input.body_editor.content_with_cursor();
+    let body_text = Paragraph::new(body_content)
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .wrap(Wrap { trim: false });
+    frame.render_widget(body_text, chunks[1]);
+
+    // Error message (if present)
+    if has_error {
+        if let Some(ref error_msg) = state.input.body_validation_error {
+            let error = Paragraph::new(format!("⚠ {}", error_msg))
+                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                .wrap(Wrap { trim: true });
+            frame.render_widget(error, chunks[2]);
+        }
+    }
+
+    // Help text (position depends on whether error is shown)
+    let help_index = if has_error { 4 } else { 3 };
+    let help = Paragraph::new(
+        "Enter: Save  |  Ctrl+N: New Line  |  Esc: Cancel  |  Ctrl+L: Clear  |  ↑↓←→: Navigate",
+    )
+    .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+    .alignment(Alignment::Center);
+    frame.render_widget(help, chunks[help_index]);
 }

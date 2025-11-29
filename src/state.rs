@@ -1,3 +1,4 @@
+use crate::editor::BodyEditor;
 use crate::types::{
     ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
     RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
@@ -20,9 +21,11 @@ pub struct UiState {
     pub expanded_groups: HashSet<String>,
     pub panel_focus: PanelFocus,
     pub active_detail_tab: DetailTab,
-    pub response_body_scroll: usize,
-    pub headers_scroll: usize,
     pub selected_param_index: usize,
+    pub body_section_expanded: bool,
+    pub response_scroll: usize,
+    pub response_selected_line: usize,
+    pub yank_flash: bool,
 }
 
 /// Modal/form input state
@@ -33,6 +36,8 @@ pub struct InputState {
     pub url_input: String,
     pub base_url_input: String,
     pub active_url_field: UrlInputField,
+    pub body_editor: BodyEditor,
+    pub body_validation_error: Option<String>,
 }
 
 /// HTTP request and authentication state
@@ -78,9 +83,11 @@ impl Default for AppState {
                 expanded_groups: HashSet::new(),
                 panel_focus: PanelFocus::EndpointsList,
                 active_detail_tab: DetailTab::Endpoint,
-                response_body_scroll: 0,
-                headers_scroll: 0,
                 selected_param_index: 0,
+                body_section_expanded: true,
+                response_scroll: 0,
+                response_selected_line: 0,
+                yank_flash: false,
             },
             input: InputState {
                 mode: InputMode::Normal,
@@ -88,6 +95,8 @@ impl Default for AppState {
                 url_input: String::new(),
                 base_url_input: String::new(),
                 active_url_field: UrlInputField::SwaggerUrl,
+                body_editor: BodyEditor::new(),
+                body_validation_error: None,
             },
             request: RequestState {
                 auth: AuthState::new(),

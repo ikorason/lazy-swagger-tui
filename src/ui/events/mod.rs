@@ -25,6 +25,7 @@ mod modals;
 mod navigation;
 mod parameters;
 mod search;
+mod yank;
 
 // Re-export public items
 pub use helpers::{apply, apply_or_char, log_debug};
@@ -89,6 +90,10 @@ impl EventHandler {
                         )?;
                     }
 
+                    InputMode::EnteringBody => {
+                        modals::handle_body_input(key, state.clone(), self.selected_index)?;
+                    }
+
                     InputMode::Normal => match key.code {
                         // QUIT
                         KeyCode::Char('q') => {
@@ -136,8 +141,10 @@ impl EventHandler {
                                                 self.selected_index,
                                                 state.clone(),
                                             );
+                                        } else if active_tab == DetailTab::Response {
+                                            navigation::handle_response_line_down(state.clone());
                                         }
-                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                        // For other tabs, j/k do nothing
                                     }
                                 }
                             }
@@ -169,8 +176,10 @@ impl EventHandler {
                                         // If on Request tab and in Viewing mode, navigate params
                                         if active_tab == DetailTab::Request {
                                             navigation::handle_request_param_up(state.clone());
+                                        } else if active_tab == DetailTab::Response {
+                                            navigation::handle_response_line_up(state.clone());
                                         }
-                                        // For other tabs, j/k do nothing (use Ctrl+d/u for scrolling)
+                                        // For other tabs, j/k do nothing
                                     }
                                 }
                             }
@@ -188,6 +197,33 @@ impl EventHandler {
                             } else {
                                 // Not editing - auth dialog
                                 modals::handle_auth_dialog(state.clone());
+                            }
+                        }
+                        // handle body editor
+                        KeyCode::Char('b') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+
+                            // Check if current endpoint supports body
+                            let supports_body = state_read
+                                .get_selected_endpoint(self.selected_index)
+                                .map(|ep| ep.supports_body())
+                                .unwrap_or(false);
+
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing a parameter - treat 'b' as character input
+                                let mut s = state.write().unwrap();
+                                s.request.param_edit_buffer.push('b');
+                            } else if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && supports_body
+                            {
+                                // Open body editor
+                                modals::handle_body_dialog(state.clone(), self.selected_index);
                             }
                         }
                         // edit param
@@ -263,6 +299,51 @@ impl EventHandler {
                                 search::handle_search_activate(state.clone());
                             }
                         }
+                        // toggle body section
+                        KeyCode::Char('x') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+
+                            let supports_body = state_read
+                                .get_selected_endpoint(self.selected_index)
+                                .map(|ep| ep.supports_body())
+                                .unwrap_or(false);
+
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'x' as character input
+                                let mut s = state.write().unwrap();
+                                s.request.param_edit_buffer.push('x');
+                            } else if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Request
+                                && supports_body
+                            {
+                                // Toggle body section
+                                apply(state.clone(), AppAction::ToggleBodySection);
+                            }
+                        }
+                        // yank (copy) current line
+                        KeyCode::Char('y') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'y' as character input
+                                let mut s = state.write().unwrap();
+                                s.request.param_edit_buffer.push('y');
+                            } else if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Response
+                            {
+                                // Yank current response line
+                                yank::handle_yank_response_line(state.clone());
+                            }
+                        }
                         // switch to endpoints panel
                         KeyCode::Char('1') => {
                             apply_or_char(
@@ -301,36 +382,6 @@ impl EventHandler {
                                 state.clone(),
                                 list_state,
                             );
-                        }
-
-                        // -- with modifiers
-                        // Ctrl+u: Scroll up in focused section
-                        KeyCode::Char('u')
-                            if key
-                                .modifiers
-                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                        {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            drop(state_read);
-
-                            if panel == PanelFocus::Details {
-                                apply(state.clone(), AppAction::ScrollUp);
-                            }
-                        }
-                        // Ctrl+d: Scroll down in focused section
-                        KeyCode::Char('d')
-                            if key
-                                .modifiers
-                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                        {
-                            let state_read = state.read().unwrap();
-                            let panel = state_read.ui.panel_focus.clone();
-                            drop(state_read);
-
-                            if panel == PanelFocus::Details {
-                                apply(state.clone(), AppAction::ScrollDown);
-                            }
                         }
 
                         // Special keys --

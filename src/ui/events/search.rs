@@ -6,7 +6,7 @@
 //! - Clearing search filters
 
 use super::helpers::log_debug;
-use crate::actions::AppAction;
+use crate::actions::{AppAction, apply_action};
 use crate::state::AppState;
 use crate::types::InputMode;
 use color_eyre::Result;
@@ -17,8 +17,7 @@ use std::sync::{Arc, RwLock};
 /// Activate search mode
 pub fn handle_search_activate(state: Arc<RwLock<AppState>>) {
     let mut s = state.write().unwrap();
-    crate::actions::apply_action(AppAction::EnterSearchMode, &mut s);
-    log_debug("Entering search mode");
+    apply_action(AppAction::EnterSearchMode, &mut s);
 }
 
 /// Handle search input
@@ -31,11 +30,23 @@ pub fn handle_search_input(
     use crossterm::event::KeyModifiers;
 
     match key.code {
-        KeyCode::Enter | KeyCode::Esc => {
-            // Exit search mode but keep the filter active
+        KeyCode::Enter => {
+            // Exit search mode and keep the filter active
             let mut s = state.write().unwrap();
             s.input.mode = InputMode::Normal;
-            log_debug("Exiting search mode");
+            log_debug("Exiting search mode (keeping filter)");
+        }
+        KeyCode::Esc => {
+            // Exit search mode and clear the filter
+            let mut s = state.write().unwrap();
+            s.input.mode = InputMode::Normal;
+            s.search.query.clear();
+            s.update_filtered_endpoints();
+            log_debug("Exiting search mode (cleared filter)");
+
+            drop(s);
+            *selected_index = 0;
+            list_state.select(Some(0));
         }
         KeyCode::Backspace => {
             let mut s = state.write().unwrap();
@@ -49,8 +60,8 @@ pub fn handle_search_input(
             *selected_index = 0;
             list_state.select(Some(0));
         }
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Clear search
+        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Ctrl+L: Clear search (consistent with other inputs)
             let mut s = state.write().unwrap();
             s.search.query.clear();
             s.update_filtered_endpoints();

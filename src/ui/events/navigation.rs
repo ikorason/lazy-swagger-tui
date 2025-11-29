@@ -3,12 +3,14 @@
 //! This module handles navigation through the UI:
 //! - List navigation (up/down in endpoints list)
 //! - Parameter navigation (j/k in request params)
+//! - Response line navigation (j/k in response viewer)
 //! - View mode toggling (flat vs grouped)
 
 use super::helpers::{apply, log_debug};
 use crate::actions::AppAction;
 use crate::state::AppState;
 use crate::types::{RequestEditMode, ViewMode};
+use crate::ui::draw::try_format_json;
 use ratatui::widgets::ListState;
 use std::sync::{Arc, RwLock};
 
@@ -22,9 +24,11 @@ pub fn handle_up(
         *selected_index -= 1;
         list_state.select(Some(*selected_index));
 
-        // Reset parameter selection when changing endpoints
+        // Reset parameter selection and response scroll when changing endpoints
         let mut s = state.write().unwrap();
         s.ui.selected_param_index = 0;
+        s.ui.response_scroll = 0;
+        s.ui.response_selected_line = 0;
         drop(s);
 
         ensure_request_config_for_selected(*selected_index, state);
@@ -49,9 +53,11 @@ pub fn handle_down(
         *selected_index += 1;
         list_state.select(Some(*selected_index));
 
-        // Reset parameter selection when changing endpoints
+        // Reset parameter selection and response scroll when changing endpoints
         let mut s = state.write().unwrap();
         s.ui.selected_param_index = 0;
+        s.ui.response_scroll = 0;
+        s.ui.response_selected_line = 0;
         drop(s);
 
         ensure_request_config_for_selected(*selected_index, state);
@@ -110,6 +116,52 @@ pub fn handle_toggle_view(
 
     let view_mode = state.read().unwrap().ui.view_mode.clone();
     log_debug(&format!("Switched to {:?} mode", view_mode));
+}
+
+/// Navigate up in response lines
+pub fn handle_response_line_up(state: Arc<RwLock<AppState>>) {
+    let mut s = state.write().unwrap();
+
+    if s.ui.response_selected_line > 0 {
+        s.ui.response_selected_line -= 1;
+
+        // Adjust scroll if selected line goes above viewport
+        if s.ui.response_selected_line < s.ui.response_scroll {
+            s.ui.response_scroll = s.ui.response_selected_line;
+        }
+    }
+}
+
+/// Navigate down in response lines
+pub fn handle_response_line_down(state: Arc<RwLock<AppState>>) {
+    let state_read = state.read().unwrap();
+
+    // Count total lines in response
+    let total_lines = if let Some(ref response) = state_read.request.current_response {
+        if !response.is_error {
+            // Count lines in formatted JSON (status + empty + body lines)
+            let formatted_body = try_format_json(&response.body);
+            2 + formatted_body.lines().count()
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    drop(state_read);
+    let mut s = state.write().unwrap();
+
+    if total_lines > 0 && s.ui.response_selected_line < total_lines - 1 {
+        s.ui.response_selected_line += 1;
+
+        // Auto-scroll down to keep selection visible (assume 20 line viewport for now)
+        let viewport_height = 20;
+        let scroll_bottom = s.ui.response_scroll + viewport_height;
+        if s.ui.response_selected_line >= scroll_bottom {
+            s.ui.response_scroll = s.ui.response_selected_line.saturating_sub(viewport_height - 1);
+        }
+    }
 }
 
 /// Ensure request config exists for selected endpoint
