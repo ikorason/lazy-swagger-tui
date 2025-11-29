@@ -7,6 +7,7 @@ mod state;
 mod swagger;
 mod types;
 mod ui;
+mod utils;
 
 use app::App;
 use color_eyre::Result;

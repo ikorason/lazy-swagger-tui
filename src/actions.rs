@@ -394,7 +394,10 @@ fn delete_word(s: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AuthState, LoadingState, ViewMode};
+    use crate::{
+        state::AuthState,
+        types::{LoadingState, ViewMode},
+    };
     use std::collections::{HashMap, HashSet};
 
     fn create_test_state() -> AppState {

@@ -205,48 +205,6 @@ pub enum UrlInputField {
 }
 
 #[derive(Debug, Clone)]
-pub struct AuthState {
-    pub token: Option<String>,
-}
-
-impl AuthState {
-    pub fn new() -> Self {
-        Self { token: None }
-    }
-
-    pub fn is_authenticated(&self) -> bool {
-        self.token.is_some()
-    }
-
-    pub fn set_token(&mut self, token: String) {
-        self.token = Some(token);
-    }
-
-    pub fn clear_token(&mut self) {
-        self.token = None;
-    }
-
-    pub fn get_masked_display(&self) -> String {
-        match &self.token {
-            Some(token) => mask_token(token),
-            None => "Not set".to_string(),
-        }
-    }
-}
-
-fn mask_token(token: &str) -> String {
-    let len = token.len();
-    if len <= 15 {
-        // Too short to safely show, just show dots
-        return "●".repeat(len);
-    }
-
-    let first = &token[..7];
-    let last = &token[len - 6..];
-    format!("{}...{}", first, last)
-}
-
-#[derive(Debug, Clone)]
 pub struct UrlSubmission {
     pub swagger_url: String,
     pub base_url: Option<String>,
@@ -481,72 +439,6 @@ mod tests {
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], "id");
-    }
-
-    // AuthState tests
-    #[test]
-    fn test_auth_state_new() {
-        let auth = AuthState::new();
-        assert!(!auth.is_authenticated());
-        assert_eq!(auth.token, None);
-    }
-
-    #[test]
-    fn test_auth_state_set_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("my-secret-token".to_string());
-        assert!(auth.is_authenticated());
-        assert_eq!(auth.token, Some("my-secret-token".to_string()));
-    }
-
-    #[test]
-    fn test_auth_state_clear_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("my-secret-token".to_string());
-        auth.clear_token();
-        assert!(!auth.is_authenticated());
-        assert_eq!(auth.token, None);
-    }
-
-    #[test]
-    fn test_masked_display_not_set() {
-        let auth = AuthState::new();
-        assert_eq!(auth.get_masked_display(), "Not set");
-    }
-
-    #[test]
-    fn test_masked_display_short_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("short".to_string()); // 5 chars, less than 15
-        let masked = auth.get_masked_display();
-        assert_eq!(masked, "●●●●●"); // All dots
-    }
-
-    #[test]
-    fn test_masked_display_long_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".to_string()); // 36 chars
-        let masked = auth.get_masked_display();
-        // Should show first 7 and last 6 chars: "eyJhbGc" + "..." + "pXVCJ9"
-        assert_eq!(masked, "eyJhbGc...pXVCJ9");
-    }
-
-    #[test]
-    fn test_masked_display_exactly_15_chars() {
-        let mut auth = AuthState::new();
-        auth.set_token("012345678901234".to_string()); // Exactly 15 chars
-        let masked = auth.get_masked_display();
-        // Too short to safely show, should be all dots
-        assert_eq!(masked, "●●●●●●●●●●●●●●●");
-    }
-
-    #[test]
-    fn test_masked_display_16_chars() {
-        let mut auth = AuthState::new();
-        auth.set_token("0123456789012345".to_string()); // 16 chars (just over threshold)
-        let masked = auth.get_masked_display();
-        // First 7: "0123456", Last 6: "012345"
-        assert_eq!(masked, "0123456...012345");
     }
 
     #[test]
