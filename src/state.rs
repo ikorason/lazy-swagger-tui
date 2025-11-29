@@ -23,6 +23,9 @@ pub struct UiState {
     pub active_detail_tab: DetailTab,
     pub selected_param_index: usize,
     pub body_section_expanded: bool,
+    pub response_scroll: usize,
+    pub response_selected_line: usize,
+    pub yank_flash: bool,
 }
 
 /// Modal/form input state
@@ -82,6 +85,9 @@ impl Default for AppState {
                 active_detail_tab: DetailTab::Endpoint,
                 selected_param_index: 0,
                 body_section_expanded: true,
+                response_scroll: 0,
+                response_selected_line: 0,
+                yank_flash: false,
             },
             input: InputState {
                 mode: InputMode::Normal,

@@ -20,3 +20,4 @@ pub use modals::{
     render_url_input_modal,
 };
 pub use panels::{render_details_panel, render_endpoints_panel};
+pub use tabs::try_format_json;

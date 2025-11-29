@@ -104,6 +104,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
         }
         AppAction::NavigateToTab(tab) => {
             state.ui.active_detail_tab = tab;
+            // Reset response scroll when navigating to/from Response tab
+            state.ui.response_scroll = 0;
+            state.ui.response_selected_line = 0;
         }
         AppAction::NavigateTabForward => {
             use DetailTab::*;
@@ -121,6 +124,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                 }
                 (PanelFocus::Details, Headers) => {
                     state.ui.active_detail_tab = Response;
+                    state.ui.response_scroll = 0;
+                    state.ui.response_selected_line = 0;
                 }
                 (PanelFocus::Details, Response) => {
                     state.ui.panel_focus = PanelFocus::EndpointsList;
@@ -141,6 +146,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                 }
                 (PanelFocus::Details, Response) => {
                     state.ui.active_detail_tab = Headers;
+                    state.ui.response_scroll = 0;
+                    state.ui.response_selected_line = 0;
                 }
                 (PanelFocus::Details, Headers) => {
                     state.ui.active_detail_tab = Request;

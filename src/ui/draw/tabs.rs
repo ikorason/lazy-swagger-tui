@@ -8,7 +8,7 @@
 
 use super::styling::get_method_color;
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, Parameter, RequestEditMode};
+use crate::types::{ApiEndpoint, DetailTab, Parameter, RequestEditMode};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -372,8 +372,23 @@ pub fn render_response_tab(
 
             // Show formatted body
             let formatted_body = try_format_json(&response.body);
-            for line in formatted_body.lines() {
-                lines.push(Line::from(line.to_string()));
+            for (idx, line) in formatted_body.lines().enumerate() {
+                // Highlight selected line when in Response tab
+                // response_selected_line counts from 0 including header (status=0, empty=1, body starts at 2)
+                let total_line_idx = idx + 2; // Add 2 for status and empty line
+                let line_style = if state.ui.active_detail_tab == DetailTab::Response
+                    && state.ui.response_selected_line == total_line_idx
+                {
+                    // Flash green if yank just happened, otherwise gray
+                    if state.ui.yank_flash {
+                        Style::default().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().bg(Color::DarkGray)
+                    }
+                } else {
+                    Style::default()
+                };
+                lines.push(Line::from(Span::styled(line.to_string(), line_style)));
             }
         }
     } else {
@@ -383,7 +398,9 @@ pub fn render_response_tab(
         )));
     }
 
-    let content = Paragraph::new(lines).wrap(Wrap { trim: false });
+    let content = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((state.ui.response_scroll as u16, 0));
 
     frame.render_widget(content, area);
 }
@@ -511,7 +528,7 @@ fn build_param_line(
 }
 
 /// Attempts to pretty-print JSON, returns original string if not valid JSON
-fn try_format_json(body: &str) -> String {
+pub fn try_format_json(body: &str) -> String {
     // Try to parse as JSON
     match serde_json::from_str::<serde_json::Value>(body) {
         Ok(json) => {

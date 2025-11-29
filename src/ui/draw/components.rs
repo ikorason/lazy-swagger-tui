@@ -82,14 +82,26 @@ pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Render the footer with command help
-pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode) {
-    let footer_text = match view_mode {
+pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode, state: &crate::state::AppState) {
+    use crate::types::{DetailTab, PanelFocus};
+
+    let base_text = match view_mode {
         ViewMode::Flat => {
             "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle | g:Group ,:URL a:Auth q:Quit"
         }
         ViewMode::Grouped => {
             "Tab:Panel j/k/↑/↓:Nav Space:Execute/Toggle | g:Ungroup ,:URL a:Auth q:Quit"
         }
+    };
+
+    // Add context-aware hints
+    let footer_text = if state.ui.panel_focus == PanelFocus::Details
+        && state.ui.active_detail_tab == DetailTab::Response
+        && state.request.current_response.is_some()
+    {
+        format!("{} | y:Yank", base_text)
+    } else {
+        base_text.to_string()
     };
 
     let footer = Paragraph::new(footer_text)

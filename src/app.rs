@@ -165,7 +165,7 @@ impl App {
         );
 
         // Render footer
-        ui::render_footer(frame, main_chunks[3], &state.ui.view_mode);
+        ui::render_footer(frame, main_chunks[3], &state.ui.view_mode, &state);
 
         // Render modals LAST - after everything else
         match state.input.mode {

@@ -25,6 +25,7 @@ mod modals;
 mod navigation;
 mod parameters;
 mod search;
+mod yank;
 
 // Re-export public items
 pub use helpers::{apply, apply_or_char, log_debug};
@@ -140,6 +141,8 @@ impl EventHandler {
                                                 self.selected_index,
                                                 state.clone(),
                                             );
+                                        } else if active_tab == DetailTab::Response {
+                                            navigation::handle_response_line_down(state.clone());
                                         }
                                         // For other tabs, j/k do nothing
                                     }
@@ -173,6 +176,8 @@ impl EventHandler {
                                         // If on Request tab and in Viewing mode, navigate params
                                         if active_tab == DetailTab::Request {
                                             navigation::handle_request_param_up(state.clone());
+                                        } else if active_tab == DetailTab::Response {
+                                            navigation::handle_response_line_up(state.clone());
                                         }
                                         // For other tabs, j/k do nothing
                                     }
@@ -318,6 +323,25 @@ impl EventHandler {
                             {
                                 // Toggle body section
                                 apply(state.clone(), AppAction::ToggleBodySection);
+                            }
+                        }
+                        // yank (copy) current line
+                        KeyCode::Char('y') => {
+                            let state_read = state.read().unwrap();
+                            let edit_mode = state_read.request.edit_mode.clone();
+                            let panel = state_read.ui.panel_focus.clone();
+                            let active_tab = state_read.ui.active_detail_tab.clone();
+                            drop(state_read);
+
+                            if matches!(edit_mode, RequestEditMode::Editing(_)) {
+                                // We're editing - treat 'y' as character input
+                                let mut s = state.write().unwrap();
+                                s.request.param_edit_buffer.push('y');
+                            } else if panel == PanelFocus::Details
+                                && active_tab == DetailTab::Response
+                            {
+                                // Yank current response line
+                                yank::handle_yank_response_line(state.clone());
                             }
                         }
                         // switch to endpoints panel
