@@ -92,7 +92,7 @@ pub fn render_details_panel(
             return;
         }
         LoadingState::Error(e) => {
-            let error = Paragraph::new(format!("Error loading endpoints:\n\n{}", e))
+            let error = Paragraph::new(format!("Error loading endpoints:\n\n{e}"))
                 .style(Style::default().fg(Color::Red));
             frame.render_widget(error, inner_area);
             return;
@@ -201,7 +201,7 @@ fn render_grouped_list(
             } => {
                 let icon = if *expanded { "▼" } else { "▶" };
                 let line = Line::from(vec![Span::styled(
-                    format!("{} {} ({})", icon, name, count),
+                    format!("{icon} {name} ({count})"),
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),

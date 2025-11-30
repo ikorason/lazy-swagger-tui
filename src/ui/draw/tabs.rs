@@ -236,7 +236,7 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
 
             for line in preview_lines {
                 lines.push(Line::from(Span::styled(
-                    format!("  {}", line),
+                    format!("  {line}"),
                     Style::default().fg(Color::Yellow),
                 )));
             }
@@ -301,7 +301,7 @@ pub fn render_headers_tab(frame: &mut Frame, area: Rect, state: &AppState) {
 
             for (key, value) in header_vec {
                 lines.push(Line::from(vec![
-                    Span::styled(format!("{}: ", key), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("{key}: "), Style::default().fg(Color::Cyan)),
                     Span::raw(value.to_string()),
                 ]));
             }
@@ -421,7 +421,7 @@ fn build_preview_url(
     let mut path = path_template.to_string();
 
     for (key, value) in path_params {
-        let placeholder = format!("{{{}}}", key);
+        let placeholder = format!("{{{key}}}");
         if path.contains(&placeholder) {
             // Show placeholder if value is empty, otherwise substitute
             if value.is_empty() {
@@ -436,7 +436,7 @@ fn build_preview_url(
     let non_empty_params: Vec<String> = query_params
         .iter()
         .filter(|(_, v)| !v.is_empty())
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| format!("{k}={v}"))
         .collect();
 
     if non_empty_params.is_empty() {
@@ -458,7 +458,7 @@ fn build_param_line(
     let type_info = if let Some(schema) = &param.schema {
         let type_str = schema.param_type.as_deref().unwrap_or("unknown");
         if let Some(format) = &schema.format {
-            format!("{}/{}", type_str, format)
+            format!("{type_str}/{format}")
         } else {
             type_str.to_string()
         }
@@ -478,11 +478,11 @@ fn build_param_line(
 
     // Value display - show cursor if editing
     let value_display = if is_editing {
-        format!("[{}▊]", current_value) // Show cursor
+        format!("[{current_value}▊]") // Show cursor
     } else if current_value.is_empty() {
         "[_____]".to_string() // Empty placeholder
     } else {
-        format!("[{}]", current_value)
+        format!("[{current_value}]")
     };
 
     // Build the line with appropriate styling
@@ -525,7 +525,7 @@ fn build_param_line(
         Span::styled(format!("{}{}: ", param.name, required_str), name_style),
         Span::styled(value_display, value_style),
         Span::raw("  "),
-        Span::styled(format!("({})", type_info), meta_style),
+        Span::styled(format!("({type_info})"), meta_style),
     ])
 }
 

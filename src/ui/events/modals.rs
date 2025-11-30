@@ -65,7 +65,7 @@ pub fn handle_url_input(
                         // Also validate base URL if provided
                         if !base_url.is_empty() {
                             if let Err(e) = config::validate_url(&base_url) {
-                                log_debug(&format!("Invalid base URL: {}", e));
+                                log_debug(&format!("Invalid base URL: {e}"));
                                 // Keep modal open
                                 return Ok(None);
                             }
@@ -94,7 +94,7 @@ pub fn handle_url_input(
                         return Ok(Some(submission));
                     }
                     Err(e) => {
-                        log_debug(&format!("Invalid swagger URL: {}", e));
+                        log_debug(&format!("Invalid swagger URL: {e}"));
                     }
                 }
             } else {
@@ -244,8 +244,7 @@ pub fn handle_token_input(
 
             if char_count > 1 {
                 log_debug(&format!(
-                    "Batched {} characters (paste detected)",
-                    char_count
+                    "Batched {char_count} characters (paste detected)"
                 ));
             }
         }
@@ -318,8 +317,7 @@ pub fn handle_body_dialog(state: Arc<RwLock<AppState>>, selected_index: usize) {
         s.input.body_editor.set_content(current_body.clone());
         s.input.mode = InputMode::EnteringBody;
         log_debug(&format!(
-            "Entering body input mode with initial content: {:?}",
-            current_body
+            "Entering body input mode with initial content: {current_body:?}"
         ));
     }
 }
@@ -372,7 +370,7 @@ pub fn handle_body_input(
 
                 // Log the original content before formatting
                 let original_body = s.input.body_editor.content().to_string();
-                log_debug(&format!("Original body: {}", original_body));
+                log_debug(&format!("Original body: {original_body}"));
 
                 // Validate JSON before accepting
                 let validation_result = s.input.body_editor.validate_json();
@@ -383,7 +381,7 @@ pub fn handle_body_input(
                         let _ = s.input.body_editor.format_json();
                         let formatted_body = s.input.body_editor.content().to_string();
 
-                        log_debug(&format!("Formatted JSON successfully: {}", formatted_body));
+                        log_debug(&format!("Formatted JSON successfully: {formatted_body}"));
 
                         // Save formatted body to config
                         let config = s.get_or_create_request_config_by_path(&path);
@@ -409,8 +407,7 @@ pub fn handle_body_input(
                         // Invalid JSON - show error and keep modal open
                         s.input.body_validation_error = Some(e.clone());
                         log_debug(&format!(
-                            "JSON validation failed: {}. Keeping modal open.",
-                            e
+                            "JSON validation failed: {e}. Keeping modal open."
                         ));
                     }
                 }
@@ -436,8 +433,7 @@ pub fn handle_body_input(
 
             if char_count > 1 {
                 log_debug(&format!(
-                    "Batched {} characters (paste detected)",
-                    char_count
+                    "Batched {char_count} characters (paste detected)"
                 ));
 
                 // Log content before format
@@ -487,8 +483,7 @@ pub fn handle_body_input(
                     }
                     Err(e) => {
                         log_debug(&format!(
-                            "Auto-format failed (invalid JSON): {}. Keeping pasted content as-is.",
-                            e
+                            "Auto-format failed (invalid JSON): {e}. Keeping pasted content as-is."
                         ));
                         // Don't show error - just keep the pasted content unformatted
                         // User can fix it and format will happen on Enter

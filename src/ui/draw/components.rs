@@ -104,7 +104,7 @@ pub fn render_footer(
         && state.ui.active_detail_tab == DetailTab::Response
         && state.request.current_response.is_some()
     {
-        format!("{} | y:Yank", base_text)
+        format!("{base_text} | y:Yank")
     } else {
         base_text.to_string()
     };

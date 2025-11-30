@@ -40,8 +40,7 @@ pub fn handle_yank_response_line(state: Arc<RwLock<AppState>>) {
         // If selected_line < 2, we're on the header
         if selected_line_idx < 2 {
             log_debug(&format!(
-                "Cannot yank header lines (idx={})",
-                selected_line_idx
+                "Cannot yank header lines (idx={selected_line_idx})"
             ));
             return;
         }
@@ -59,11 +58,11 @@ pub fn handle_yank_response_line(state: Arc<RwLock<AppState>>) {
         }
 
         let line_content = lines[body_line_idx];
-        log_debug(&format!("Line content: '{}'", line_content));
+        log_debug(&format!("Line content: '{line_content}'"));
 
         // Try to extract just the value if this is a JSON key-value pair
         let value_to_copy = extract_json_value(line_content);
-        log_debug(&format!("Extracted value: '{}'", value_to_copy));
+        log_debug(&format!("Extracted value: '{value_to_copy}'"));
 
         drop(state_read);
 
@@ -71,7 +70,7 @@ pub fn handle_yank_response_line(state: Arc<RwLock<AppState>>) {
         match Clipboard::new() {
             Ok(mut clipboard) => match clipboard.set_text(value_to_copy.clone()) {
                 Ok(_) => {
-                    log_debug(&format!("✓ Successfully yanked: {}", value_to_copy));
+                    log_debug(&format!("✓ Successfully yanked: {value_to_copy}"));
 
                     // Set flash flag
                     {
@@ -88,11 +87,11 @@ pub fn handle_yank_response_line(state: Arc<RwLock<AppState>>) {
                     });
                 }
                 Err(e) => {
-                    log_debug(&format!("✗ Failed to copy to clipboard: {}", e));
+                    log_debug(&format!("✗ Failed to copy to clipboard: {e}"));
                 }
             },
             Err(e) => {
-                log_debug(&format!("✗ Failed to access clipboard: {}", e));
+                log_debug(&format!("✗ Failed to access clipboard: {e}"));
             }
         }
     } else {

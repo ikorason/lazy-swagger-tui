@@ -96,26 +96,21 @@ pub fn collect_paste_batch(initial_char: char) -> (String, usize) {
     let mut chars = vec![initial_char];
 
     // Drain any immediately available character events
-    loop {
-        match event::poll(std::time::Duration::from_millis(0)) {
-            Ok(true) => {
-                if let Ok(Event::Key(next_key)) = event::read() {
-                    match next_key.code {
-                        KeyCode::Char(next_c)
-                            if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                        {
-                            chars.push(next_c);
-                        }
-                        _ => {
-                            // Non-character or control key, stop batching
-                            break;
-                        }
-                    }
-                } else {
+    while let Ok(true) = event::poll(std::time::Duration::from_millis(0)) {
+        if let Ok(Event::Key(next_key)) = event::read() {
+            match next_key.code {
+                KeyCode::Char(next_c)
+                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                {
+                    chars.push(next_c);
+                }
+                _ => {
+                    // Non-character or control key, stop batching
                     break;
                 }
             }
-            _ => break,
+        } else {
+            break;
         }
     }
 
@@ -130,5 +125,5 @@ pub fn log_debug(msg: &str) {
         .create(true)
         .append(true)
         .open("/tmp/lazy-swagger-tui.log")
-        .and_then(|mut f| writeln!(f, "{}", msg));
+        .and_then(|mut f| writeln!(f, "{msg}"));
 }

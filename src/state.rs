@@ -263,7 +263,7 @@ impl AppState {
         self.request
             .configs
             .entry(path.to_string())
-            .or_insert(RequestConfig::default())
+            .or_default()
     }
 
     /// Filter endpoints based on search query
@@ -304,7 +304,7 @@ impl AppState {
                 self.search
                     .filtered_grouped_endpoints
                     .entry(tag.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(endpoint.clone());
             }
 
@@ -313,7 +313,7 @@ impl AppState {
                 self.search
                     .filtered_grouped_endpoints
                     .entry("Other".to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(endpoint.clone());
             }
         }

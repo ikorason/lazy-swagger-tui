@@ -330,7 +330,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
 
     // Label with cursor position
     let cursor_pos = state.input.body_editor.cursor_position_display();
-    let label = Paragraph::new(format!("JSON Body: {}", cursor_pos))
+    let label = Paragraph::new(format!("JSON Body: {cursor_pos}"))
         .style(Style::default().fg(Color::LightGreen));
     frame.render_widget(label, chunks[0]);
 
@@ -348,7 +348,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     // Error message (if present)
     if has_error {
         if let Some(ref error_msg) = state.input.body_validation_error {
-            let error = Paragraph::new(format!("⚠ {}", error_msg))
+            let error = Paragraph::new(format!("⚠ {error_msg}"))
                 .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                 .wrap(Wrap { trim: true });
             frame.render_widget(error, chunks[2]);

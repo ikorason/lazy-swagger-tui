@@ -69,11 +69,10 @@ pub fn handle_request_param_up(state: Arc<RwLock<AppState>>) {
     let mut s = state.write().unwrap();
 
     // Only navigate if in Viewing mode
-    if matches!(s.request.edit_mode, RequestEditMode::Viewing) {
-        if s.ui.selected_param_index > 0 {
+    if matches!(s.request.edit_mode, RequestEditMode::Viewing)
+        && s.ui.selected_param_index > 0 {
             s.ui.selected_param_index -= 1;
         }
-    }
 }
 
 /// Navigate down in request parameters
@@ -115,7 +114,7 @@ pub fn handle_toggle_view(
     list_state.select(Some(0));
 
     let view_mode = state.read().unwrap().ui.view_mode.clone();
-    log_debug(&format!("Switched to {:?} mode", view_mode));
+    log_debug(&format!("Switched to {view_mode:?} mode"));
 }
 
 /// Navigate up in response lines

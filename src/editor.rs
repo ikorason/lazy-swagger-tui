@@ -112,7 +112,7 @@ impl BodyEditor {
                 let cursor_col = self.cursor_col.min(line.len());
                 let before = &line[..cursor_col];
                 let after = &line[cursor_col..];
-                result.push(format!("{}█{}", before, after));
+                result.push(format!("{before}█{after}"));
             } else {
                 result.push(line.clone());
             }
@@ -228,7 +228,7 @@ impl BodyEditor {
             let last_inserted = lines_to_insert.last().unwrap();
             let last_line_idx = self.cursor_row + lines_to_insert.len() - 1;
             self.lines
-                .insert(last_line_idx, format!("{}{}", last_inserted, after_cursor));
+                .insert(last_line_idx, format!("{last_inserted}{after_cursor}"));
 
             // Update cursor to end of inserted content
             self.cursor_row = last_line_idx;
@@ -242,10 +242,8 @@ impl BodyEditor {
     /// Converts curly quotes to straight quotes for JSON compatibility
     pub fn insert_str_normalized(&mut self, s: &str) {
         let normalized = s
-            .replace('\u{201C}', "\"") // Left double quote "
-            .replace('\u{201D}', "\"") // Right double quote "
-            .replace('\u{2018}', "'") // Left single quote '
-            .replace('\u{2019}', "'"); // Right single quote '
+            .replace(['\u{201C}', '\u{201D}'], "\"") // Right double quote "
+            .replace(['\u{2018}', '\u{2019}'], "'"); // Right single quote '
 
         self.insert_str(&normalized);
     }
@@ -419,26 +417,21 @@ impl BodyEditor {
         let mut chars = vec![initial_char];
 
         // Drain any immediately available character events
-        loop {
-            match crossterm::event::poll(std::time::Duration::from_millis(0)) {
-                Ok(true) => {
-                    if let Ok(Event::Key(next_key)) = crossterm::event::read() {
-                        match next_key.code {
-                            KeyCode::Char(next_c)
-                                if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                            {
-                                chars.push(next_c);
-                            }
-                            _ => {
-                                // Non-character or control key, stop batching
-                                break;
-                            }
-                        }
-                    } else {
+        while let Ok(true) = crossterm::event::poll(std::time::Duration::from_millis(0)) {
+            if let Ok(Event::Key(next_key)) = crossterm::event::read() {
+                match next_key.code {
+                    KeyCode::Char(next_c)
+                        if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        chars.push(next_c);
+                    }
+                    _ => {
+                        // Non-character or control key, stop batching
                         break;
                     }
                 }
-                _ => break,
+            } else {
+                break;
             }
         }
 
@@ -611,14 +604,14 @@ mod tests {
 
         // Verify it's now formatted with multiple lines
         let formatted = editor.content();
-        println!("Formatted content:\n{}", formatted);
+        println!("Formatted content:\n{formatted}");
         println!("Line count: {}", formatted.lines().count());
         assert!(formatted.contains("  ")); // Has indentation
         assert!(formatted.contains("\n")); // Has newlines
 
         // Verify content_with_cursor() shows the formatted version
         let with_cursor = editor.content_with_cursor();
-        println!("\nWith cursor:\n{}", with_cursor);
+        println!("\nWith cursor:\n{with_cursor}");
         println!("Line count: {}", with_cursor.lines().count());
         assert!(with_cursor.contains("  ")); // Has indentation
         assert!(with_cursor.contains("\n")); // Has newlines

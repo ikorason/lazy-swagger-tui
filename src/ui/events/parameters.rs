@@ -8,7 +8,7 @@
 use super::helpers::{apply, log_debug};
 use crate::actions::AppAction;
 use crate::state::AppState;
-use crate::types::{RequestConfig, RequestEditMode};
+use crate::types::RequestEditMode;
 use std::sync::{Arc, RwLock};
 
 /// Enter edit mode for the currently selected parameter
@@ -72,7 +72,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
             s.request
                 .configs
                 .entry(endpoint_path.clone())
-                .or_insert_with(RequestConfig::default);
+                .or_default();
         }
 
         // Enter edit mode using action
@@ -84,7 +84,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
             },
         );
 
-        log_debug(&format!("Editing parameter: {}", param_name));
+        log_debug(&format!("Editing parameter: {param_name}"));
     }
 }
 

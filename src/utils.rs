@@ -7,5 +7,5 @@ pub fn mask_token(token: &str) -> String {
 
     let first = &token[..7];
     let last = &token[len - 6..];
-    format!("{}...{}", first, last)
+    format!("{first}...{last}")
 }

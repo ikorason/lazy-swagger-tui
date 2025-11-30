@@ -40,7 +40,7 @@ pub fn handle_enter(
                 // Validate that all required path params are filled
                 let config = state_read.request.configs.get(&endpoint.path);
                 if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
-                    log_debug(&format!("Cannot execute: {}", err_msg));
+                    log_debug(&format!("Cannot execute: {err_msg}"));
                     drop(state_read);
 
                     // Store error in response so user can see it
@@ -70,10 +70,10 @@ pub fn handle_enter(
 
                     if state_write.ui.expanded_groups.contains(&group_name) {
                         state_write.ui.expanded_groups.remove(&group_name);
-                        log_debug(&format!("Collapsed group: {}", group_name));
+                        log_debug(&format!("Collapsed group: {group_name}"));
                     } else {
                         state_write.ui.expanded_groups.insert(group_name.clone());
-                        log_debug(&format!("Expanded group: {}", group_name));
+                        log_debug(&format!("Expanded group: {group_name}"));
                     }
 
                     let visible_count = count_visible_items(&state_write);
@@ -98,7 +98,7 @@ pub fn handle_enter(
                         // Validate that all required path params are filled
                         let config = state_read.request.configs.get(&endpoint.path);
                         if let Err(err_msg) = can_execute_endpoint(&endpoint, config) {
-                            log_debug(&format!("Cannot execute: {}", err_msg));
+                            log_debug(&format!("Cannot execute: {err_msg}"));
                             drop(state_read);
 
                             // Store error in response so user can see it

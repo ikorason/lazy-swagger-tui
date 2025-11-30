@@ -328,7 +328,7 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                         endpoint
                             .parameters
                             .iter()
-                            .any(|p| &p.name == &param_name && p.location == "path")
+                            .any(|p| p.name == param_name && p.location == "path")
                     })
                     .unwrap_or(false);
 
