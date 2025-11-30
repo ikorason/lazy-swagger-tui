@@ -1,7 +1,9 @@
 #[cfg(test)]
 use crate::editor::BodyEditor;
 use crate::state::AppState;
-use crate::types::{DetailTab, InputMode, PanelFocus, RequestEditMode, UrlInputField};
+use crate::types::{
+    DetailTab, InputMode, PanelFocus, ParameterType, RequestEditMode, UrlInputField,
+};
 
 /// Represents all possible state-changing actions in the application
 /// This pattern separates input handling from state mutations, making the code
@@ -295,10 +297,8 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
             state.request.edit_mode = RequestEditMode::Editing(param_name.clone());
             // Initialize buffer with current value if it exists
             if let Some(config) = state.request.configs.get(&endpoint_path) {
-                if let Some(value) = config.path_params.get(&param_name) {
-                    state.request.param_edit_buffer = value.clone();
-                } else if let Some(value) = config.query_params.get(&param_name) {
-                    state.request.param_edit_buffer = value.clone();
+                if let Some(value) = config.get_param_value(&param_name) {
+                    state.request.param_edit_buffer = value.to_string();
                 } else {
                     state.request.param_edit_buffer.clear();
                 }
@@ -336,9 +336,9 @@ pub fn apply_action(action: AppAction, state: &mut AppState) {
                 let config = state.get_or_create_request_config_by_path(&endpoint_path);
 
                 if is_path_param {
-                    config.path_params.insert(param_name, buffer_value);
+                    config.set_param(param_name, buffer_value, ParameterType::Path);
                 } else {
-                    config.query_params.insert(param_name, buffer_value);
+                    config.set_param(param_name, buffer_value, ParameterType::Query);
                 }
             }
             state.request.edit_mode = RequestEditMode::Viewing;
@@ -394,7 +394,10 @@ fn delete_word(s: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AuthState, LoadingState, ViewMode};
+    use crate::{
+        state::AuthState,
+        types::{LoadingState, ViewMode},
+    };
     use std::collections::{HashMap, HashSet};
 
     fn create_test_state() -> AppState {
@@ -414,6 +417,9 @@ mod tests {
                 active_detail_tab: DetailTab::Endpoint,
                 selected_param_index: 0,
                 body_section_expanded: true,
+                response_scroll: 0,
+                response_selected_line: 0,
+                yank_flash: false,
             },
             input: InputState {
                 mode: InputMode::Normal,

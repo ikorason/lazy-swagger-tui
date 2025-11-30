@@ -1,8 +1,9 @@
 use crate::editor::BodyEditor;
 use crate::types::{
-    ApiEndpoint, ApiResponse, AuthState, DetailTab, InputMode, LoadingState, PanelFocus,
+    ApiEndpoint, ApiResponse, DetailTab, InputMode, LoadingState, PanelFocus, ParameterType,
     RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
 };
+use crate::utils::mask_token;
 use std::collections::{HashMap, HashSet};
 
 /// Data loaded from backend
@@ -49,6 +50,46 @@ pub struct RequestState {
     pub configs: HashMap<String, RequestConfig>,
     pub edit_mode: RequestEditMode,
     pub param_edit_buffer: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthState {
+    pub token: Option<String>,
+}
+
+impl AuthState {
+    pub fn new() -> Self {
+        Self { token: None }
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.token.is_some()
+    }
+
+    pub fn set_token(&mut self, token: String) {
+        self.token = Some(token);
+    }
+
+    pub fn clear_token(&mut self) {
+        self.token = None;
+    }
+
+    pub fn get_masked_display(&self) -> String {
+        match &self.token {
+            Some(token) => mask_token(token),
+            None => "Not set".to_string(),
+        }
+    }
+
+    /// Get authentication status text for display in the UI header
+    pub fn get_status_text(&self) -> String {
+        if self.is_authenticated() {
+            let display = self.get_masked_display();
+            format!("🔒 {display} | 'a':edit 'A':clear")
+        } else {
+            "🔓 Not authenticated | 'a':set token".to_string()
+        }
+    }
 }
 
 /// Search and filtering state
@@ -172,38 +213,21 @@ impl AppState {
 
                 // Initialize parameters from Swagger spec
                 for param in &endpoint.parameters {
-                    match param.location.as_str() {
-                        "path" => {
-                            // Path params: initialize with default or empty
-                            if let Some(schema) = &param.schema {
-                                if let Some(default) = &schema.default {
-                                    let default_str = json_value_to_string(default);
-                                    config.path_params.insert(param.name.clone(), default_str);
-                                }
-                            }
-                            // Always insert path params (even if empty) so they show in UI
-                            config
-                                .path_params
-                                .entry(param.name.clone())
-                                .or_insert_with(String::new);
-                        }
-                        "query" => {
-                            // Query params: initialize with default or empty
-                            if let Some(schema) = &param.schema {
-                                if let Some(default) = &schema.default {
-                                    let default_str = json_value_to_string(default);
-                                    config.query_params.insert(param.name.clone(), default_str);
-                                }
-                            }
-                            // Always insert query params (even if empty) so they show in UI
-                            config
-                                .query_params
-                                .entry(param.name.clone())
-                                .or_insert_with(String::new);
-                        }
-                        _ => {
-                            // Ignore other param types for now (header, cookie, etc.)
-                        }
+                    let param_type = match param.location.as_str() {
+                        "path" => Some(ParameterType::Path),
+                        "query" => Some(ParameterType::Query),
+                        _ => None, // header, cookie, etc. - we don't support yet
+                    };
+
+                    if let Some(param_type) = param_type {
+                        let value = param
+                            .schema
+                            .as_ref()
+                            .and_then(|schema| schema.default.as_ref())
+                            .map(json_value_to_string)
+                            .unwrap_or_default();
+
+                        config.set_param(param.name.clone(), value, param_type);
                     }
                 }
 
@@ -324,5 +348,95 @@ pub fn count_visible_items(state: &AppState) -> usize {
             }
             count
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // AuthState tests
+    #[test]
+    fn test_auth_state_new() {
+        let auth = AuthState::new();
+        assert!(!auth.is_authenticated());
+        assert_eq!(auth.token, None);
+    }
+
+    #[test]
+    fn test_auth_state_set_token() {
+        let mut auth = AuthState::new();
+        auth.set_token("my-secret-token".to_string());
+        assert!(auth.is_authenticated());
+        assert_eq!(auth.token, Some("my-secret-token".to_string()));
+    }
+
+    #[test]
+    fn test_auth_state_clear_token() {
+        let mut auth = AuthState::new();
+        auth.set_token("my-secret-token".to_string());
+        auth.clear_token();
+        assert!(!auth.is_authenticated());
+        assert_eq!(auth.token, None);
+    }
+
+    #[test]
+    fn test_masked_display_not_set() {
+        let auth = AuthState::new();
+        assert_eq!(auth.get_masked_display(), "Not set");
+    }
+
+    #[test]
+    fn test_masked_display_short_token() {
+        let mut auth = AuthState::new();
+        auth.set_token("short".to_string()); // 5 chars, less than 15
+        let masked = auth.get_masked_display();
+        assert_eq!(masked, "●●●●●"); // All dots
+    }
+
+    #[test]
+    fn test_masked_display_long_token() {
+        let mut auth = AuthState::new();
+        auth.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".to_string()); // 36 chars
+        let masked = auth.get_masked_display();
+        // Should show first 7 and last 6 chars: "eyJhbGc" + "..." + "pXVCJ9"
+        assert_eq!(masked, "eyJhbGc...pXVCJ9");
+    }
+
+    #[test]
+    fn test_masked_display_exactly_15_chars() {
+        let mut auth = AuthState::new();
+        auth.set_token("012345678901234".to_string()); // Exactly 15 chars
+        let masked = auth.get_masked_display();
+        // Too short to safely show, should be all dots
+        assert_eq!(masked, "●●●●●●●●●●●●●●●");
+    }
+
+    #[test]
+    fn test_masked_display_16_chars() {
+        let mut auth = AuthState::new();
+        auth.set_token("0123456789012345".to_string()); // 16 chars (just over threshold)
+        let masked = auth.get_masked_display();
+        // First 7: "0123456", Last 6: "012345"
+        assert_eq!(masked, "0123456...012345");
+    }
+
+    #[test]
+    fn test_get_status_text_not_authenticated() {
+        let auth = AuthState::new();
+        let status = auth.get_status_text();
+        assert_eq!(status, "🔓 Not authenticated | 'a':set token");
+    }
+
+    #[test]
+    fn test_get_status_text_authenticated() {
+        let mut auth = AuthState::new();
+        auth.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".to_string());
+        let status = auth.get_status_text();
+        // Should show masked token
+        assert!(status.contains("🔒"));
+        assert!(status.contains("eyJhbGc...pXVCJ9"));
+        assert!(status.contains("'a':edit"));
+        assert!(status.contains("'A':clear"));
     }
 }

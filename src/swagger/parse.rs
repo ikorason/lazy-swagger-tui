@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_parse_with_parameters() {
-        use crate::types::Parameter;
+        use crate::types::ApiParameter;
 
         let mut paths = HashMap::new();
         paths.insert(
@@ -235,7 +235,7 @@ mod tests {
                 get: Some(Operation {
                     summary: Some("Get user by ID".to_string()),
                     tags: Some(vec!["Users".to_string()]),
-                    parameters: Some(vec![Parameter {
+                    parameters: Some(vec![ApiParameter {
                         name: "id".to_string(),
                         location: "path".to_string(),
                         required: Some(true),

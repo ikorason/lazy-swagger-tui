@@ -8,12 +8,12 @@ pub struct ApiEndpoint {
     pub path: String,
     pub summary: Option<String>,
     pub tags: Vec<String>,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<ApiParameter>,
 }
 
 impl ApiEndpoint {
     /// Get all path parameters for this endpoint
-    pub fn path_params(&self) -> Vec<&Parameter> {
+    pub fn path_params(&self) -> Vec<&ApiParameter> {
         self.parameters
             .iter()
             .filter(|p| p.location == "path")
@@ -21,7 +21,7 @@ impl ApiEndpoint {
     }
 
     /// Get all query parameters for this endpoint
-    pub fn query_params(&self) -> Vec<&Parameter> {
+    pub fn query_params(&self) -> Vec<&ApiParameter> {
         self.parameters
             .iter()
             .filter(|p| p.location == "query")
@@ -34,8 +34,7 @@ impl ApiEndpoint {
             // Path params are typically always required
             // Check if we have a non-empty value for this param
             config
-                .path_params
-                .get(&param.name)
+                .get_param_value(&param.name)
                 .map(|v| !v.is_empty())
                 .unwrap_or(false)
         })
@@ -47,8 +46,7 @@ impl ApiEndpoint {
             .iter()
             .filter(|param| {
                 config
-                    .path_params
-                    .get(&param.name)
+                    .get_param_value(&param.name)
                     .map(|v| v.is_empty())
                     .unwrap_or(true)
             })
@@ -66,7 +64,7 @@ impl ApiEndpoint {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Parameter {
+pub struct ApiParameter {
     pub name: String,
 
     #[serde(rename = "in")]
@@ -90,13 +88,76 @@ pub struct ParameterSchema {
     pub default: Option<serde_json::Value>,
 }
 
+/// Distinguishes between path and query parameters
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterType {
+    Path,
+    Query,
+}
+
+/// Represents a parameter value configured by the user
+#[derive(Debug, Clone)]
+pub struct Parameter {
+    pub name: String,
+    pub value: String,
+    pub param_type: ParameterType,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RequestConfig {
-    pub query_params: HashMap<String, String>,
-    pub path_params: HashMap<String, String>,
+    pub parameters: Vec<Parameter>,
     pub body: Option<String>,
-    // Future additions:
-    // pub headers: HashMap<String, String>,
+}
+
+impl RequestConfig {
+    /// Get the value of a parameter by name (searches both path and query params)
+    pub fn get_param_value(&self, name: &str) -> Option<&str> {
+        self.parameters
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| p.value.as_str())
+    }
+
+    /// Insert or update a parameter
+    pub fn set_param(&mut self, name: String, value: String, param_type: ParameterType) {
+        if let Some(param) = self.parameters.iter_mut().find(|p| p.name == name) {
+            param.value = value;
+        } else {
+            self.parameters.push(Parameter {
+                name,
+                value,
+                param_type,
+            });
+        }
+    }
+
+    /// Get all path parameters
+    pub fn path_params(&self) -> impl Iterator<Item = &Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.param_type == ParameterType::Path)
+    }
+
+    /// Get all query parameters
+    pub fn query_params(&self) -> impl Iterator<Item = &Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.param_type == ParameterType::Query)
+    }
+
+    /// Convert path parameters to HashMap for URL building
+    pub fn path_params_map(&self) -> HashMap<String, String> {
+        self.path_params()
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect()
+    }
+
+    /// Convert query parameters to HashMap for URL building
+    pub fn query_params_map(&self) -> HashMap<String, String> {
+        self.query_params()
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect()
+    }
 }
 
 /// Represents an HTTP response from an API endpoint
@@ -158,7 +219,7 @@ pub struct PathItem {
 pub struct Operation {
     pub summary: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub parameters: Option<Vec<Parameter>>,
+    pub parameters: Option<Vec<ApiParameter>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -205,48 +266,6 @@ pub enum UrlInputField {
 }
 
 #[derive(Debug, Clone)]
-pub struct AuthState {
-    pub token: Option<String>,
-}
-
-impl AuthState {
-    pub fn new() -> Self {
-        Self { token: None }
-    }
-
-    pub fn is_authenticated(&self) -> bool {
-        self.token.is_some()
-    }
-
-    pub fn set_token(&mut self, token: String) {
-        self.token = Some(token);
-    }
-
-    pub fn clear_token(&mut self) {
-        self.token = None;
-    }
-
-    pub fn get_masked_display(&self) -> String {
-        match &self.token {
-            Some(token) => mask_token(token),
-            None => "Not set".to_string(),
-        }
-    }
-}
-
-fn mask_token(token: &str) -> String {
-    let len = token.len();
-    if len <= 15 {
-        // Too short to safely show, just show dots
-        return "●".repeat(len);
-    }
-
-    let first = &token[..7];
-    let last = &token[len - 6..];
-    format!("{}...{}", first, last)
-}
-
-#[derive(Debug, Clone)]
 pub struct UrlSubmission {
     pub swagger_url: String,
     pub base_url: Option<String>,
@@ -283,8 +302,8 @@ mod tests {
     use super::*;
 
     // Helper function to create test parameters
-    fn create_param(name: &str, location: &str, required: bool) -> Parameter {
-        Parameter {
+    fn create_param(name: &str, location: &str, required: bool) -> ApiParameter {
+        ApiParameter {
             name: name.to_string(),
             location: location.to_string(),
             required: Some(required),
@@ -343,9 +362,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("id".to_string(), "123".to_string());
+        config.set_param("id".to_string(), "123".to_string(), ParameterType::Path);
 
         assert!(endpoint.has_all_required_path_params(&config));
     }
@@ -376,7 +393,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config.path_params.insert("id".to_string(), "".to_string()); // Empty string
+        config.set_param("id".to_string(), "".to_string(), ParameterType::Path);
 
         assert!(!endpoint.has_all_required_path_params(&config));
     }
@@ -395,12 +412,8 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("userId".to_string(), "42".to_string());
-        config
-            .path_params
-            .insert("postId".to_string(), "99".to_string());
+        config.set_param("userId".to_string(), "42".to_string(), ParameterType::Path);
+        config.set_param("postId".to_string(), "99".to_string(), ParameterType::Path);
 
         assert!(endpoint.has_all_required_path_params(&config));
     }
@@ -416,9 +429,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("id".to_string(), "123".to_string());
+        config.set_param("id".to_string(), "123".to_string(), ParameterType::Path);
 
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 0);
@@ -455,11 +466,9 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("userId".to_string(), "42".to_string());
-        // postId is missing
+        config.set_param("userId".to_string(), "42".to_string(), ParameterType::Path);
 
+        // postId is missing
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], "postId");
@@ -476,83 +485,17 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config.path_params.insert("id".to_string(), "".to_string()); // Empty string
+        config.set_param("id".to_string(), "".to_string(), ParameterType::Path);
 
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], "id");
     }
 
-    // AuthState tests
-    #[test]
-    fn test_auth_state_new() {
-        let auth = AuthState::new();
-        assert!(!auth.is_authenticated());
-        assert_eq!(auth.token, None);
-    }
-
-    #[test]
-    fn test_auth_state_set_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("my-secret-token".to_string());
-        assert!(auth.is_authenticated());
-        assert_eq!(auth.token, Some("my-secret-token".to_string()));
-    }
-
-    #[test]
-    fn test_auth_state_clear_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("my-secret-token".to_string());
-        auth.clear_token();
-        assert!(!auth.is_authenticated());
-        assert_eq!(auth.token, None);
-    }
-
-    #[test]
-    fn test_masked_display_not_set() {
-        let auth = AuthState::new();
-        assert_eq!(auth.get_masked_display(), "Not set");
-    }
-
-    #[test]
-    fn test_masked_display_short_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("short".to_string()); // 5 chars, less than 15
-        let masked = auth.get_masked_display();
-        assert_eq!(masked, "●●●●●"); // All dots
-    }
-
-    #[test]
-    fn test_masked_display_long_token() {
-        let mut auth = AuthState::new();
-        auth.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".to_string()); // 36 chars
-        let masked = auth.get_masked_display();
-        // Should show first 7 and last 6 chars: "eyJhbGc" + "..." + "pXVCJ9"
-        assert_eq!(masked, "eyJhbGc...pXVCJ9");
-    }
-
-    #[test]
-    fn test_masked_display_exactly_15_chars() {
-        let mut auth = AuthState::new();
-        auth.set_token("012345678901234".to_string()); // Exactly 15 chars
-        let masked = auth.get_masked_display();
-        // Too short to safely show, should be all dots
-        assert_eq!(masked, "●●●●●●●●●●●●●●●");
-    }
-
-    #[test]
-    fn test_masked_display_16_chars() {
-        let mut auth = AuthState::new();
-        auth.set_token("0123456789012345".to_string()); // 16 chars (just over threshold)
-        let masked = auth.get_masked_display();
-        // First 7: "0123456", Last 6: "012345"
-        assert_eq!(masked, "0123456...012345");
-    }
-
     #[test]
     fn test_request_config_default() {
         let config = RequestConfig::default();
-        assert_eq!(config.path_params.len(), 0);
-        assert_eq!(config.query_params.len(), 0);
+        assert_eq!(config.path_params().count(), 0);
+        assert_eq!(config.query_params().count(), 0);
     }
 }

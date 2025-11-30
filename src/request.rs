@@ -5,6 +5,63 @@ use crate::types::{ApiEndpoint, ApiResponse};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+pub struct RequestUrlBuilder {
+    base_url: String,
+    path: String,
+    path_params: HashMap<String, String>,
+    query_params: HashMap<String, String>,
+}
+
+impl RequestUrlBuilder {
+    pub fn new(base_url: String) -> Self {
+        Self {
+            base_url,
+            path: String::new(),
+            path_params: HashMap::new(),
+            query_params: HashMap::new(),
+        }
+    }
+
+    pub fn set_path(mut self, path: String) -> Self {
+        self.path = path;
+        self
+    }
+
+    pub fn set_path_params(mut self, params: HashMap<String, String>) -> Self {
+        self.path_params = params;
+        self
+    }
+
+    pub fn set_query_params(mut self, params: HashMap<String, String>) -> Self {
+        self.query_params = params;
+        self
+    }
+
+    pub fn build(self) -> Result<String, String> {
+        let path = self
+            .path_params
+            .iter()
+            .fold(self.path.clone(), |acc, (key, value)| {
+                acc.replace(&format!("{{{key}}}"), value)
+            });
+
+        // Step 2: Build full URL with base
+        let full_path = format!("{}{}", self.base_url.trim_end_matches('/'), path);
+
+        // Step 3: Parse as URL
+        let mut url = Url::parse(&full_path).map_err(|e| format!("Invalid URL: {e}"))?;
+
+        // Step 4: Add query parameters (only non-empty ones)
+        for (key, value) in self.query_params {
+            if !value.is_empty() {
+                url.query_pairs_mut().append_pair(&key, &value);
+            }
+        }
+
+        Ok(url.to_string())
+    }
+}
+
 /// Executes an HTTP request for the given endpoint in the background
 pub fn execute_request_background(
     state: Arc<RwLock<AppState>>,
@@ -28,27 +85,30 @@ pub fn execute_request_background(
                 .get(&endpoint.path)
                 .map(|config| {
                     (
-                        config.path_params.clone(),
-                        config.query_params.clone(),
+                        config.path_params_map(),
+                        config.query_params_map(),
                         config.body.clone(),
                     )
                 })
                 .unwrap_or_default()
         };
 
-        // Build the full URL with query parameters
-        let full_url =
-            match build_url_with_params(&base_url, &endpoint.path, &path_params, &query_params) {
-                Ok(url) => url,
-                Err(e) => {
-                    // Handle URL building error
-                    let mut s = state.write().unwrap();
-                    s.request.executing_endpoint = None;
-                    s.request.current_response =
-                        Some(ApiResponse::error(format!("Failed to build URL: {}", e)));
-                    return;
-                }
-            };
+        let full_url = match RequestUrlBuilder::new(base_url)
+            .set_path(endpoint.path)
+            .set_path_params(path_params)
+            .set_query_params(query_params)
+            .build()
+        {
+            Ok(url) => url,
+            Err(e) => {
+                // Handle error and return early
+                let mut s = state.write().unwrap();
+                s.request.executing_endpoint = None;
+                s.request.current_response =
+                    Some(ApiResponse::error(format!("Failed to build URL: {e}")));
+                return;
+            }
+        };
 
         // Convert method string to reqwest::Method
         let method = match endpoint.method.to_uppercase().as_str() {
@@ -155,7 +215,7 @@ async fn execute_request(
                     body: String::new(),
                     duration, // Even on error, show how long we waited
                     is_error: true,
-                    error_message: Some(format!("Failed to read response body: {}", e)),
+                    error_message: Some(format!("Failed to read response body: {e}")),
                 },
             }
         }
@@ -170,43 +230,24 @@ async fn execute_request(
                 body: String::new(),
                 duration,
                 is_error: true,
-                error_message: Some(format!("Request failed: {}", e)),
+                error_message: Some(format!("Request failed: {e}")),
             }
         }
     }
 }
 
-/// Build a full URL with path and query parameters
+#[cfg(test)]
 pub(crate) fn build_url_with_params(
     base_url: &str,
     path_template: &str,
     path_params: &HashMap<String, String>,
     query_params: &HashMap<String, String>,
 ) -> Result<String, String> {
-    // Step 1: Substitute path parameters
-    let mut path = path_template.to_string();
-
-    for (key, value) in path_params {
-        let placeholder = format!("{{{}}}", key);
-        if path.contains(&placeholder) {
-            path = path.replace(&placeholder, value);
-        }
-    }
-
-    // Step 2: Build full URL with base
-    let full_path = format!("{}{}", base_url.trim_end_matches('/'), path);
-
-    // Step 3: Parse as URL
-    let mut url = Url::parse(&full_path).map_err(|e| format!("Invalid URL: {}", e))?;
-
-    // Step 4: Add query parameters (only non-empty ones)
-    for (key, value) in query_params {
-        if !value.is_empty() {
-            url.query_pairs_mut().append_pair(key, value);
-        }
-    }
-
-    Ok(url.to_string())
+    RequestUrlBuilder::new(base_url.to_string())
+        .set_path(path_template.to_string())
+        .set_path_params(path_params.clone())
+        .set_query_params(query_params.clone())
+        .build()
 }
 
 #[cfg(test)]

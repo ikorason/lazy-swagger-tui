@@ -6,9 +6,10 @@
 //! - Headers tab (response headers)
 //! - Response tab (response body with JSON formatting)
 
-use super::styling::get_method_color;
+use super::styling;
+use styling::get_method_color;
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, DetailTab, Parameter, RequestEditMode};
+use crate::types::{ApiEndpoint, ApiParameter, DetailTab, RequestEditMode};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -53,7 +54,7 @@ pub fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint
 
     let content = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(styling::default_fg()));
 
     frame.render_widget(content, area);
 }
@@ -63,8 +64,8 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
     let mut lines: Vec<Line> = Vec::new();
 
     // Get path and query parameters for this endpoint
-    let path_params: Vec<&Parameter> = endpoint.path_params();
-    let query_params: Vec<&Parameter> = endpoint.query_params();
+    let path_params: Vec<&ApiParameter> = endpoint.path_params();
+    let query_params: Vec<&ApiParameter> = endpoint.query_params();
 
     // Check if there are ANY parameters or body support
     if path_params.is_empty() && query_params.is_empty() && !endpoint.supports_body() {
@@ -113,14 +114,12 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
                         state.request.param_edit_buffer.as_str()
                     } else {
                         config
-                            .and_then(|c| c.path_params.get(&param.name))
-                            .map(|s| s.as_str())
+                            .and_then(|c| c.get_param_value(&param.name))
                             .unwrap_or("")
                     }
                 } else {
                     config
-                        .and_then(|c| c.path_params.get(&param.name))
-                        .map(|s| s.as_str())
+                        .and_then(|c| c.get_param_value(&param.name))
                         .unwrap_or("")
                 };
 
@@ -163,14 +162,12 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
                         state.request.param_edit_buffer.as_str()
                     } else {
                         config
-                            .and_then(|c| c.query_params.get(&param.name))
-                            .map(|s| s.as_str())
+                            .and_then(|c| c.get_param_value(&param.name))
                             .unwrap_or("")
                     }
                 } else {
                     config
-                        .and_then(|c| c.query_params.get(&param.name))
-                        .map(|s| s.as_str())
+                        .and_then(|c| c.get_param_value(&param.name))
                         .unwrap_or("")
                 };
 
@@ -258,7 +255,9 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
 
     // Build preview URL with both path and query params
     let preview_url = if let Some(config) = config {
-        build_preview_url(&endpoint.path, &config.path_params, &config.query_params)
+        let path_params = config.path_params_map();
+        let query_params = config.query_params_map();
+        build_preview_url(&endpoint.path, &path_params, &query_params)
     } else {
         endpoint.path.clone()
     };
@@ -381,7 +380,10 @@ pub fn render_response_tab(
                 {
                     // Flash green if yank just happened, otherwise gray
                     if state.ui.yank_flash {
-                        Style::default().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .bg(Color::Green)
+                            .fg(Color::Black)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().bg(Color::DarkGray)
                     }
@@ -446,7 +448,7 @@ fn build_preview_url(
 
 /// Helper function to build a single parameter line with styling
 fn build_param_line(
-    param: &Parameter,
+    param: &ApiParameter,
     current_value: &str,
     is_selected: bool,
     is_editing: bool,
@@ -500,9 +502,9 @@ fn build_param_line(
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(if is_path_param {
-            Color::Rgb(180, 100, 180) // Dimmed magenta
+            Color::Magenta
         } else {
-            Color::White
+            styling::default_fg()
         })
     };
 

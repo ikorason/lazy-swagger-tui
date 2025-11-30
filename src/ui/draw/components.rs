@@ -7,8 +7,8 @@
 //! - Loading spinners
 //! - Error/empty state messages
 
-use crate::state::AppState;
-use crate::types::{AuthState, InputMode, LoadingState, ViewMode};
+use crate::state::{AppState, AuthState};
+use crate::types::{InputMode, LoadingState, ViewMode};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -33,7 +33,7 @@ pub fn render_header(
         LoadingState::Error(_) => "Error".to_string(),
     };
 
-    let auth_status = get_auth_status_text(auth_state);
+    let auth_status = auth_state.get_status_text();
 
     let header_text = format!("lazy swagger tui - {swagger_url} [{status_text}] | {auth_status}",);
 
@@ -82,7 +82,12 @@ pub fn render_search_bar(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Render the footer with command help
-pub fn render_footer(frame: &mut Frame, area: Rect, view_mode: &ViewMode, state: &crate::state::AppState) {
+pub fn render_footer(
+    frame: &mut Frame,
+    area: Rect,
+    view_mode: &ViewMode,
+    state: &crate::state::AppState,
+) {
     use crate::types::{DetailTab, PanelFocus};
 
     let base_text = match view_mode {
@@ -184,14 +189,4 @@ pub fn render_no_search_results(frame: &mut Frame, area: Rect) {
         );
 
     frame.render_widget(empty, area);
-}
-
-/// Get authentication status display text
-fn get_auth_status_text(auth: &AuthState) -> String {
-    if auth.is_authenticated() {
-        let display = auth.get_masked_display();
-        format!("🔒 {display} | 'a':edit 'A':clear")
-    } else {
-        "🔓 Not authenticated | 'a':set token".to_string()
-    }
 }

@@ -5,6 +5,7 @@
 //! - Token input modal
 //! - Clear confirmation modal
 
+use super::styling;
 use crate::state::AppState;
 use crate::types::UrlInputField;
 use ratatui::{
@@ -42,7 +43,7 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -71,7 +72,7 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
 
     // Help text
     let help = Paragraph::new("Enter: Save  |  Ctrl+L: Clear  |  Esc: Cancel")
-        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+        .style(Style::default().fg(styling::muted_fg()))
         .alignment(Alignment::Center);
     frame.render_widget(help, chunks[3]);
 }
@@ -100,7 +101,7 @@ pub fn render_clear_confirmation_modal(frame: &mut Frame) {
         .title(" Clear Token? ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -116,7 +117,7 @@ pub fn render_clear_confirmation_modal(frame: &mut Frame) {
 
     // Message
     let message = Paragraph::new("This will remove your authentication token.\nYou will need to re-enter it to make authenticated requests.")
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(styling::default_fg()))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
     frame.render_widget(message, chunks[0]);
@@ -158,7 +159,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -250,7 +251,7 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
     let help = Paragraph::new(
         "Tab: Switch fields  |  Ctrl+L: Clear field  |  Enter: Confirm  |  Esc: Cancel",
     )
-    .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+    .style(Style::default().fg(styling::muted_fg()))
     .alignment(Alignment::Center);
     frame.render_widget(help, chunks[7]);
 }
@@ -282,7 +283,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White));
+        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -343,7 +344,7 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
     let help = Paragraph::new(
         "Enter: Save  |  Ctrl+N: New Line  |  Esc: Cancel  |  Ctrl+L: Clear  |  ↑↓←→: Navigate",
     )
-    .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+    .style(Style::default().fg(styling::muted_fg()))
     .alignment(Alignment::Center);
     frame.render_widget(help, chunks[help_index]);
 }

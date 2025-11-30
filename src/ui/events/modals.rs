@@ -5,13 +5,13 @@
 //! - Authentication token input
 //! - Confirmation dialogs
 
-use super::helpers::{apply, apply_many, log_debug};
+use super::helpers::{apply, apply_many, collect_paste_batch, log_debug};
 use crate::actions::AppAction;
 use crate::config;
 use crate::state::AppState;
 use crate::types::{InputMode, UrlInputField, UrlSubmission};
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::KeyCode;
 use std::sync::{Arc, RwLock};
 
 /// Handle URL dialog activation
@@ -40,16 +40,17 @@ pub fn handle_url_input(
     match key.code {
         KeyCode::Tab => {
             // Switch between fields
-            let mut s = state.write().unwrap();
+            let current_field = {
+                let s = state.read().unwrap();
+                s.input.active_url_field.clone()
+            };
 
-            match s.input.active_url_field {
-                UrlInputField::SwaggerUrl => {
-                    s.input.active_url_field = UrlInputField::BaseUrl;
-                }
-                UrlInputField::BaseUrl => {
-                    s.input.active_url_field = UrlInputField::SwaggerUrl;
-                }
-            }
+            let new_field = match current_field {
+                UrlInputField::SwaggerUrl => UrlInputField::BaseUrl,
+                UrlInputField::BaseUrl => UrlInputField::SwaggerUrl,
+            };
+
+            apply(state.clone(), AppAction::SetActiveUrlField(new_field));
         }
 
         KeyCode::Enter => {
@@ -102,98 +103,76 @@ pub fn handle_url_input(
         }
 
         KeyCode::Esc => {
-            let mut s = state.write().unwrap();
-            s.input.mode = InputMode::Normal;
-            s.input.url_input.clear();
-            s.input.base_url_input.clear();
-            s.input.active_url_field = UrlInputField::SwaggerUrl;
+            apply(state, AppAction::ExitUrlInputMode);
             log_debug("URL input cancelled");
         }
 
         KeyCode::Backspace => {
-            let mut s = state.write().unwrap();
-            match s.input.active_url_field {
+            let active_field = {
+                let s = state.read().unwrap();
+                s.input.active_url_field.clone()
+            };
+
+            match active_field {
                 UrlInputField::SwaggerUrl => {
-                    s.input.url_input.pop();
+                    apply(state, AppAction::BackspaceUrlInput);
                 }
                 UrlInputField::BaseUrl => {
-                    s.input.base_url_input.pop();
+                    apply(state, AppAction::BackspaceBaseUrlInput);
                 }
             }
         }
 
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+W: Delete word backwards
-            let mut s = state.write().unwrap();
-            let input = match s.input.active_url_field {
-                UrlInputField::SwaggerUrl => &mut s.input.url_input,
-                UrlInputField::BaseUrl => &mut s.input.base_url_input,
+            let active_field = {
+                let s = state.read().unwrap();
+                s.input.active_url_field.clone()
             };
 
-            // Find last word boundary (space, slash, colon, dot)
-            if let Some(pos) = input.rfind(|c: char| c == ' ' || c == '/' || c == ':' || c == '.') {
-                input.truncate(pos);
-            } else {
-                input.clear();
+            match active_field {
+                UrlInputField::SwaggerUrl => {
+                    apply(state, AppAction::DeleteWordUrlInput);
+                }
+                UrlInputField::BaseUrl => {
+                    apply(state, AppAction::DeleteWordBaseUrlInput);
+                }
             }
         }
 
         KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Ctrl+L: Clear current field (matching search behavior)
-            let mut s = state.write().unwrap();
-            match s.input.active_url_field {
+            let active_field = {
+                let s = state.read().unwrap();
+                s.input.active_url_field.clone()
+            };
+
+            match active_field {
                 UrlInputField::SwaggerUrl => {
-                    s.input.url_input.clear();
+                    apply(state, AppAction::ClearUrlInput);
                     log_debug("Cleared swagger URL input");
                 }
                 UrlInputField::BaseUrl => {
-                    s.input.base_url_input.clear();
+                    apply(state, AppAction::ClearBaseUrlInput);
                     log_debug("Cleared base URL input");
                 }
             }
         }
 
         KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Collect this character and any pending characters (for paste support)
-            let mut chars = vec![c];
+            let (batch_str, char_count) = collect_paste_batch(c);
 
-            // Drain any immediately available character events
-            loop {
-                match event::poll(std::time::Duration::from_millis(0)) {
-                    Ok(true) => {
-                        if let Ok(Event::Key(next_key)) = event::read() {
-                            match next_key.code {
-                                KeyCode::Char(next_c)
-                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                {
-                                    chars.push(next_c);
-                                }
-                                _ => {
-                                    // Non-character or control key, stop batching
-                                    break;
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ => break,
+            let active_field = {
+                let s = state.read().unwrap();
+                s.input.active_url_field.clone()
+            };
+
+            match active_field {
+                UrlInputField::SwaggerUrl => {
+                    apply(state.clone(), AppAction::AppendToUrlInput(batch_str));
                 }
-            }
-
-            // Log before consuming chars
-            let char_count = chars.len();
-
-            // Add all batched characters at once
-            let mut s = state.write().unwrap();
-            for ch in chars {
-                match s.input.active_url_field {
-                    UrlInputField::SwaggerUrl => {
-                        s.input.url_input.push(ch);
-                    }
-                    UrlInputField::BaseUrl => {
-                        s.input.base_url_input.push(ch);
-                    }
+                UrlInputField::BaseUrl => {
+                    apply(state.clone(), AppAction::AppendToBaseUrlInput(batch_str));
                 }
             }
 
@@ -201,7 +180,7 @@ pub fn handle_url_input(
                 log_debug(&format!(
                     "Batched {} characters for {}",
                     char_count,
-                    if matches!(s.input.active_url_field, UrlInputField::SwaggerUrl) {
+                    if matches!(active_field, UrlInputField::SwaggerUrl) {
                         "Swagger URL"
                     } else {
                         "Base URL"
@@ -225,79 +204,40 @@ pub fn handle_token_input(
 
     match key.code {
         KeyCode::Enter => {
-            let mut s = state.write().unwrap();
-            let token = s.input.token_input.trim().to_string();
+            let token = {
+                let s = state.read().unwrap();
+                s.input.token_input.trim().to_string()
+            };
 
             if !token.is_empty() {
-                s.request.auth.set_token(token);
+                apply_many(state, vec![
+                    AppAction::SetAuthToken(token),
+                    AppAction::ExitTokenInputMode,
+                ]);
                 log_debug("Token saved");
             } else {
+                apply(state, AppAction::ExitTokenInputMode);
                 log_debug("Empty token, not saving");
             }
-            s.input.mode = InputMode::Normal;
-            s.input.token_input.clear();
         }
         KeyCode::Esc => {
-            let mut s = state.write().unwrap();
-            s.input.mode = InputMode::Normal;
-            s.input.token_input.clear();
+            apply(state, AppAction::ExitTokenInputMode);
             log_debug("Token input cancelled");
         }
         KeyCode::Backspace => {
-            let mut s = state.write().unwrap();
-            s.input.token_input.pop();
+            apply(state, AppAction::BackspaceTokenInput);
         }
         KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+L: Clear entire token (consistent with other inputs)
-            let mut s = state.write().unwrap();
-            s.input.token_input.clear();
+            apply(state, AppAction::ClearTokenInput);
             log_debug("Cleared token input");
         }
         KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Ctrl+W: Delete word backwards (less useful for tokens, but consistent)
-            let mut s = state.write().unwrap();
-            if let Some(pos) = s.input.token_input.rfind(|c: char| !c.is_alphanumeric()) {
-                s.input.token_input.truncate(pos);
-            } else {
-                s.input.token_input.clear();
-            }
+            apply(state, AppAction::DeleteWordTokenInput);
         }
         KeyCode::Char(c) => {
-            // Collect this character and any pending characters (for paste support)
-            let mut chars = vec![c];
+            let (batch_str, char_count) = collect_paste_batch(c);
 
-            // Drain any immediately available character events
-            loop {
-                match event::poll(std::time::Duration::from_millis(0)) {
-                    Ok(true) => {
-                        if let Ok(Event::Key(next_key)) = event::read() {
-                            match next_key.code {
-                                KeyCode::Char(next_c)
-                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                {
-                                    chars.push(next_c);
-                                }
-                                _ => {
-                                    // Non-character or control key, stop batching and handle it next iteration
-                                    break;
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ => break,
-                }
-            }
-
-            // Log before consuming chars
-            let char_count = chars.len();
-
-            // Add all batched characters at once
-            let mut s = state.write().unwrap();
-            for ch in chars {
-                s.input.token_input.push(ch);
-            }
+            apply(state, AppAction::AppendToTokenInput(batch_str));
 
             if char_count > 1 {
                 log_debug(&format!(
@@ -318,14 +258,14 @@ pub fn handle_clear_confirmation(
 ) -> Result<()> {
     match key.code {
         KeyCode::Char('y') | KeyCode::Char('Y') => {
-            let mut s = state.write().unwrap();
-            s.request.auth.clear_token();
-            s.input.mode = InputMode::Normal;
+            apply_many(state, vec![
+                AppAction::ClearAuthToken,
+                AppAction::ExitConfirmClearTokenMode,
+            ]);
             log_debug("Token cleared");
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-            let mut s = state.write().unwrap();
-            s.input.mode = InputMode::Normal;
+            apply(state, AppAction::ExitConfirmClearTokenMode);
             log_debug("Token clear cancelled");
         }
         _ => {}
