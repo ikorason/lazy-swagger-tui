@@ -45,7 +45,6 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
 
             if let Some(param) = param {
                 let param_name = param.name.clone();
-                let param_location = param.location.clone();
                 let endpoint_path = endpoint.path.clone();
 
                 // Get current value from the appropriate HashMap
@@ -53,14 +52,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
                     .request
                     .configs
                     .get(&endpoint_path)
-                    .and_then(|config| {
-                        if param_location == "path" {
-                            config.path_params.get(&param_name)
-                        } else {
-                            config.query_params.get(&param_name)
-                        }
-                    })
-                    .cloned()
+                    .and_then(|config| config.get_param_value(&param_name).map(|s| s.to_string()))
                     .unwrap_or_default();
 
                 Some((param_name, endpoint_path, current_value))

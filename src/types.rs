@@ -8,12 +8,12 @@ pub struct ApiEndpoint {
     pub path: String,
     pub summary: Option<String>,
     pub tags: Vec<String>,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<ApiParameter>,
 }
 
 impl ApiEndpoint {
     /// Get all path parameters for this endpoint
-    pub fn path_params(&self) -> Vec<&Parameter> {
+    pub fn path_params(&self) -> Vec<&ApiParameter> {
         self.parameters
             .iter()
             .filter(|p| p.location == "path")
@@ -21,7 +21,7 @@ impl ApiEndpoint {
     }
 
     /// Get all query parameters for this endpoint
-    pub fn query_params(&self) -> Vec<&Parameter> {
+    pub fn query_params(&self) -> Vec<&ApiParameter> {
         self.parameters
             .iter()
             .filter(|p| p.location == "query")
@@ -34,8 +34,7 @@ impl ApiEndpoint {
             // Path params are typically always required
             // Check if we have a non-empty value for this param
             config
-                .path_params
-                .get(&param.name)
+                .get_param_value(&param.name)
                 .map(|v| !v.is_empty())
                 .unwrap_or(false)
         })
@@ -47,8 +46,7 @@ impl ApiEndpoint {
             .iter()
             .filter(|param| {
                 config
-                    .path_params
-                    .get(&param.name)
+                    .get_param_value(&param.name)
                     .map(|v| v.is_empty())
                     .unwrap_or(true)
             })
@@ -66,7 +64,7 @@ impl ApiEndpoint {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Parameter {
+pub struct ApiParameter {
     pub name: String,
 
     #[serde(rename = "in")]
@@ -90,13 +88,62 @@ pub struct ParameterSchema {
     pub default: Option<serde_json::Value>,
 }
 
+/// Distinguishes between path and query parameters
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterType {
+    Path,
+    Query,
+}
+
+/// Represents a parameter value configured by the user
+#[derive(Debug, Clone)]
+pub struct Parameter {
+    pub name: String,
+    pub value: String,
+    pub param_type: ParameterType,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RequestConfig {
-    pub query_params: HashMap<String, String>,
-    pub path_params: HashMap<String, String>,
+    pub parameters: Vec<Parameter>,
     pub body: Option<String>,
-    // Future additions:
-    // pub headers: HashMap<String, String>,
+}
+
+impl RequestConfig {
+    /// Get the value of a parameter by name (searches both path and query params)
+    pub fn get_param_value(&self, name: &str) -> Option<&str> {
+        self.parameters
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| p.value.as_str())
+    }
+
+    /// Insert or update a parameter
+    pub fn set_param(&mut self, name: String, value: String, param_type: ParameterType) {
+        if let Some(param) = self.parameters.iter_mut().find(|p| p.name == name) {
+            param.value = value;
+        } else {
+            self.parameters.push(Parameter {
+                name,
+                value,
+                param_type,
+            });
+        }
+    }
+
+    /// Get all path parameters
+    pub fn path_params(&self) -> impl Iterator<Item = &Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.param_type == ParameterType::Path)
+    }
+
+    /// Get all query parameters
+    pub fn query_params(&self) -> impl Iterator<Item = &Parameter> {
+        self.parameters
+            .iter()
+            .filter(|p| p.param_type == ParameterType::Query)
+    }
 }
 
 /// Represents an HTTP response from an API endpoint
@@ -158,7 +205,7 @@ pub struct PathItem {
 pub struct Operation {
     pub summary: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub parameters: Option<Vec<Parameter>>,
+    pub parameters: Option<Vec<ApiParameter>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -241,8 +288,8 @@ mod tests {
     use super::*;
 
     // Helper function to create test parameters
-    fn create_param(name: &str, location: &str, required: bool) -> Parameter {
-        Parameter {
+    fn create_param(name: &str, location: &str, required: bool) -> ApiParameter {
+        ApiParameter {
             name: name.to_string(),
             location: location.to_string(),
             required: Some(required),
@@ -301,9 +348,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("id".to_string(), "123".to_string());
+        config.set_param("id".to_string(), "123".to_string(), ParameterType::Path);
 
         assert!(endpoint.has_all_required_path_params(&config));
     }
@@ -334,7 +379,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config.path_params.insert("id".to_string(), "".to_string()); // Empty string
+        config.set_param("id".to_string(), "".to_string(), ParameterType::Path);
 
         assert!(!endpoint.has_all_required_path_params(&config));
     }
@@ -353,12 +398,8 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("userId".to_string(), "42".to_string());
-        config
-            .path_params
-            .insert("postId".to_string(), "99".to_string());
+        config.set_param("userId".to_string(), "42".to_string(), ParameterType::Path);
+        config.set_param("postId".to_string(), "99".to_string(), ParameterType::Path);
 
         assert!(endpoint.has_all_required_path_params(&config));
     }
@@ -374,9 +415,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("id".to_string(), "123".to_string());
+        config.set_param("id".to_string(), "123".to_string(), ParameterType::Path);
 
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 0);
@@ -413,11 +452,9 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config
-            .path_params
-            .insert("userId".to_string(), "42".to_string());
-        // postId is missing
+        config.set_param("userId".to_string(), "42".to_string(), ParameterType::Path);
 
+        // postId is missing
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], "postId");
@@ -434,7 +471,7 @@ mod tests {
         };
 
         let mut config = RequestConfig::default();
-        config.path_params.insert("id".to_string(), "".to_string()); // Empty string
+        config.set_param("id".to_string(), "".to_string(), ParameterType::Path);
 
         let missing = endpoint.missing_path_params(&config);
         assert_eq!(missing.len(), 1);
@@ -444,7 +481,7 @@ mod tests {
     #[test]
     fn test_request_config_default() {
         let config = RequestConfig::default();
-        assert_eq!(config.path_params.len(), 0);
-        assert_eq!(config.query_params.len(), 0);
+        assert_eq!(config.path_params().count(), 0);
+        assert_eq!(config.query_params().count(), 0);
     }
 }

@@ -1,7 +1,7 @@
 use crate::editor::BodyEditor;
 use crate::types::{
-    ApiEndpoint, ApiResponse, DetailTab, InputMode, LoadingState, PanelFocus, RenderItem,
-    RequestConfig, RequestEditMode, UrlInputField, ViewMode,
+    ApiEndpoint, ApiResponse, DetailTab, InputMode, LoadingState, PanelFocus, ParameterType,
+    RenderItem, RequestConfig, RequestEditMode, UrlInputField, ViewMode,
 };
 use crate::utils::mask_token;
 use std::collections::{HashMap, HashSet};
@@ -213,38 +213,21 @@ impl AppState {
 
                 // Initialize parameters from Swagger spec
                 for param in &endpoint.parameters {
-                    match param.location.as_str() {
-                        "path" => {
-                            // Path params: initialize with default or empty
-                            if let Some(schema) = &param.schema {
-                                if let Some(default) = &schema.default {
-                                    let default_str = json_value_to_string(default);
-                                    config.path_params.insert(param.name.clone(), default_str);
-                                }
-                            }
-                            // Always insert path params (even if empty) so they show in UI
-                            config
-                                .path_params
-                                .entry(param.name.clone())
-                                .or_insert_with(String::new);
-                        }
-                        "query" => {
-                            // Query params: initialize with default or empty
-                            if let Some(schema) = &param.schema {
-                                if let Some(default) = &schema.default {
-                                    let default_str = json_value_to_string(default);
-                                    config.query_params.insert(param.name.clone(), default_str);
-                                }
-                            }
-                            // Always insert query params (even if empty) so they show in UI
-                            config
-                                .query_params
-                                .entry(param.name.clone())
-                                .or_insert_with(String::new);
-                        }
-                        _ => {
-                            // Ignore other param types for now (header, cookie, etc.)
-                        }
+                    let param_type = match param.location.as_str() {
+                        "path" => Some(ParameterType::Path),
+                        "query" => Some(ParameterType::Query),
+                        _ => None, // header, cookie, etc. - we don't support yet
+                    };
+
+                    if let Some(param_type) = param_type {
+                        let value = param
+                            .schema
+                            .as_ref()
+                            .and_then(|schema| schema.default.as_ref())
+                            .map(json_value_to_string)
+                            .unwrap_or_default();
+
+                        config.set_param(param.name.clone(), value, param_type);
                     }
                 }
 
