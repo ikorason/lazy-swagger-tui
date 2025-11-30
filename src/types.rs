@@ -144,6 +144,20 @@ impl RequestConfig {
             .iter()
             .filter(|p| p.param_type == ParameterType::Query)
     }
+
+    /// Convert path parameters to HashMap for URL building
+    pub fn path_params_map(&self) -> HashMap<String, String> {
+        self.path_params()
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect()
+    }
+
+    /// Convert query parameters to HashMap for URL building
+    pub fn query_params_map(&self) -> HashMap<String, String> {
+        self.query_params()
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect()
+    }
 }
 
 /// Represents an HTTP response from an API endpoint

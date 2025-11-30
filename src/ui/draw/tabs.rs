@@ -8,7 +8,7 @@
 
 use super::styling::get_method_color;
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, ApiParameter, DetailTab, ParameterType, RequestEditMode};
+use crate::types::{ApiEndpoint, ApiParameter, DetailTab, RequestEditMode};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -254,20 +254,8 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
 
     // Build preview URL with both path and query params
     let preview_url = if let Some(config) = config {
-        let mut path_params = HashMap::new();
-        let mut query_params = HashMap::new();
-
-        for param in &config.parameters {
-            match param.param_type {
-                ParameterType::Path => {
-                    path_params.insert(param.name.clone(), param.value.clone());
-                }
-                ParameterType::Query => {
-                    query_params.insert(param.name.clone(), param.value.clone());
-                }
-            }
-        }
-
+        let path_params = config.path_params_map();
+        let query_params = config.query_params_map();
         build_preview_url(&endpoint.path, &path_params, &query_params)
     } else {
         endpoint.path.clone()

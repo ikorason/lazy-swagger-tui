@@ -1,7 +1,7 @@
 use url::Url;
 
 use crate::state::AppState;
-use crate::types::{ApiEndpoint, ApiResponse, ParameterType};
+use crate::types::{ApiEndpoint, ApiResponse};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -84,21 +84,11 @@ pub fn execute_request_background(
                 .configs
                 .get(&endpoint.path)
                 .map(|config| {
-                    let mut path_params = HashMap::new();
-                    let mut query_params = HashMap::new();
-
-                    for param in &config.parameters {
-                        match param.param_type {
-                            ParameterType::Path => {
-                                path_params.insert(param.name.clone(), param.value.clone());
-                            }
-                            ParameterType::Query => {
-                                query_params.insert(param.name.clone(), param.value.clone());
-                            }
-                        }
-                    }
-
-                    (path_params, query_params, config.body.clone())
+                    (
+                        config.path_params_map(),
+                        config.query_params_map(),
+                        config.body.clone(),
+                    )
                 })
                 .unwrap_or_default()
         };
