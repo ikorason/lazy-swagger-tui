@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, dev/* ]
+    branches: [main, dev/*]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,9 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Install Rust (generic minimal install)
+      - name: Setup Rust (non-Windows)
+        if: runner.os != 'Windows'
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
+          override: true
+          profile: minimal
+
+      # On Windows, explicitly request 64-bit MSVC stdlib/target
+      - name: Setup Rust (Windows x86_64)
+        if: runner.os == 'Windows'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+          profile: minimal
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -50,9 +65,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust (for clippy)
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
+          override: true
           components: clippy
+          profile: minimal
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -60,7 +79,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust (for fmt)
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
+          override: true
           components: rustfmt
+          profile: minimal
       - run: cargo fmt --all -- --check
