@@ -1,7 +1,15 @@
 [package]
 name = "lazy-swagger-tui"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Irfan Aulizi <irfanabliz914@gmail.com>"]
+description = "A fast terminal UI for testing APIs via Swagger/OpenAPI specs"
+readme = "README.md"
+homepage = "https://github.com/ikorason/lazy-swagger-tui"
+repository = "https://github.com/ikorason/lazy-swagger-tui"
+license = "MIT"
+keywords = ["tui", "swagger", "openapi", "api", "terminal", "ratatui"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # terminal UI libraries
