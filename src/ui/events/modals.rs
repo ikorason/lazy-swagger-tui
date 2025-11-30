@@ -5,13 +5,13 @@
 //! - Authentication token input
 //! - Confirmation dialogs
 
-use super::helpers::{apply, apply_many, log_debug};
+use super::helpers::{apply, apply_many, collect_paste_batch, log_debug};
 use crate::actions::AppAction;
 use crate::config;
 use crate::state::AppState;
 use crate::types::{InputMode, UrlInputField, UrlSubmission};
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::KeyCode;
 use std::sync::{Arc, RwLock};
 
 /// Handle URL dialog activation
@@ -160,35 +160,7 @@ pub fn handle_url_input(
         }
 
         KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            // Collect this character and any pending characters (for paste support)
-            let mut chars = vec![c];
-
-            // Drain any immediately available character events
-            loop {
-                match event::poll(std::time::Duration::from_millis(0)) {
-                    Ok(true) => {
-                        if let Ok(Event::Key(next_key)) = event::read() {
-                            match next_key.code {
-                                KeyCode::Char(next_c)
-                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                {
-                                    chars.push(next_c);
-                                }
-                                _ => {
-                                    // Non-character or control key, stop batching
-                                    break;
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ => break,
-                }
-            }
-
-            let char_count = chars.len();
-            let batch_str: String = chars.into_iter().collect();
+            let (batch_str, char_count) = collect_paste_batch(c);
 
             let active_field = {
                 let s = state.read().unwrap();
@@ -263,35 +235,7 @@ pub fn handle_token_input(
             apply(state, AppAction::DeleteWordTokenInput);
         }
         KeyCode::Char(c) => {
-            // Collect this character and any pending characters (for paste support)
-            let mut chars = vec![c];
-
-            // Drain any immediately available character events
-            loop {
-                match event::poll(std::time::Duration::from_millis(0)) {
-                    Ok(true) => {
-                        if let Ok(Event::Key(next_key)) = event::read() {
-                            match next_key.code {
-                                KeyCode::Char(next_c)
-                                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                {
-                                    chars.push(next_c);
-                                }
-                                _ => {
-                                    // Non-character or control key, stop batching
-                                    break;
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ => break,
-                }
-            }
-
-            let char_count = chars.len();
-            let batch_str: String = chars.into_iter().collect();
+            let (batch_str, char_count) = collect_paste_batch(c);
 
             apply(state, AppAction::AppendToTokenInput(batch_str));
 

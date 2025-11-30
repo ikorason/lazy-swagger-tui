@@ -4,11 +4,13 @@
 //! - State locking helpers (apply actions)
 //! - Edit mode checking
 //! - Validation functions
+//! - Paste batching
 //! - Debug logging
 
 use crate::actions::{AppAction, apply_action};
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, RequestConfig, RequestEditMode};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::{Arc, RwLock};
@@ -81,6 +83,45 @@ pub fn can_execute_endpoint(
     }
 
     Ok(())
+}
+
+/// Collect a batch of characters for paste support
+///
+/// When a character is typed, this function checks for any immediately available
+/// character events and batches them together. This enables fast paste operations
+/// in terminals.
+///
+/// Returns a tuple of (batched_string, character_count)
+pub fn collect_paste_batch(initial_char: char) -> (String, usize) {
+    let mut chars = vec![initial_char];
+
+    // Drain any immediately available character events
+    loop {
+        match event::poll(std::time::Duration::from_millis(0)) {
+            Ok(true) => {
+                if let Ok(Event::Key(next_key)) = event::read() {
+                    match next_key.code {
+                        KeyCode::Char(next_c)
+                            if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            chars.push(next_c);
+                        }
+                        _ => {
+                            // Non-character or control key, stop batching
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+
+    let count = chars.len();
+    let batch_str: String = chars.into_iter().collect();
+    (batch_str, count)
 }
 
 /// Log debug message to /tmp/lazy-swagger-tui.log
