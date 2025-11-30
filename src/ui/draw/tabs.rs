@@ -7,17 +7,17 @@
 //! - Response tab (response body with JSON formatting)
 
 use super::styling;
-use styling::get_method_color;
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, ApiParameter, DetailTab, RequestEditMode};
 use ratatui::{
-    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
+    Frame,
 };
 use std::collections::HashMap;
+use styling::get_method_color;
 
 /// Render the Endpoint tab content
 pub fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint) {

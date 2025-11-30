@@ -7,7 +7,7 @@
 
 use super::helpers::{can_execute_endpoint, log_debug};
 use crate::request::execute_request_background;
-use crate::state::{AppState, count_visible_items};
+use crate::state::{count_visible_items, AppState};
 use crate::types::{ApiResponse, RenderItem, ViewMode};
 use ratatui::widgets::ListState;
 use std::sync::{Arc, RwLock};

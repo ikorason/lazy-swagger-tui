@@ -9,10 +9,10 @@ use super::styling;
 use crate::state::AppState;
 use crate::types::UrlInputField;
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    Frame,
 };
 
 /// Render the token input modal for bearer authentication
@@ -43,7 +43,11 @@ pub fn render_token_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
+        .style(
+            Style::default()
+                .bg(styling::default_bg())
+                .fg(styling::default_fg()),
+        );
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -101,7 +105,11 @@ pub fn render_clear_confirmation_modal(frame: &mut Frame) {
         .title(" Clear Token? ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
+        .style(
+            Style::default()
+                .bg(styling::default_bg())
+                .fg(styling::default_fg()),
+        );
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -159,7 +167,11 @@ pub fn render_url_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
+        .style(
+            Style::default()
+                .bg(styling::default_bg())
+                .fg(styling::default_fg()),
+        );
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
@@ -283,7 +295,11 @@ pub fn render_body_input_modal(frame: &mut Frame, state: &AppState) {
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         )
-        .style(Style::default().bg(styling::default_bg()).fg(styling::default_fg()));
+        .style(
+            Style::default()
+                .bg(styling::default_bg())
+                .fg(styling::default_fg()),
+        );
 
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);

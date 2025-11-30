@@ -7,7 +7,7 @@
 //! - Paste batching
 //! - Debug logging
 
-use crate::actions::{AppAction, apply_action};
+use crate::actions::{apply_action, AppAction};
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, RequestConfig, RequestEditMode};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};

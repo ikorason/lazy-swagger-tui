@@ -39,7 +39,10 @@ pub fn handle_yank_response_line(state: Arc<RwLock<AppState>>) {
         // Lines in response: [Status line, Empty line, ...body lines...]
         // If selected_line < 2, we're on the header
         if selected_line_idx < 2 {
-            log_debug(&format!("Cannot yank header lines (idx={})", selected_line_idx));
+            log_debug(&format!(
+                "Cannot yank header lines (idx={})",
+                selected_line_idx
+            ));
             return;
         }
 

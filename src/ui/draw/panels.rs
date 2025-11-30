@@ -8,16 +8,16 @@ use super::components::{
     render_empty_message, render_error_message, render_loading_spinner, render_no_search_results,
 };
 use super::{styling, tabs::*};
-use styling::get_method_color;
 use crate::state::AppState;
 use crate::types::{DetailTab, LoadingState, PanelFocus, RenderItem, ViewMode};
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    Frame,
 };
+use styling::get_method_color;
 
 /// Render the left panel with endpoint list (flat or grouped)
 pub fn render_endpoints_panel(

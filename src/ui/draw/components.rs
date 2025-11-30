@@ -10,10 +10,10 @@
 use crate::state::{AppState, AuthState};
 use crate::types::{InputMode, LoadingState, ViewMode};
 use ratatui::{
-    Frame,
     layout::Rect,
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph},
+    Frame,
 };
 
 /// Render the application header with status and auth info

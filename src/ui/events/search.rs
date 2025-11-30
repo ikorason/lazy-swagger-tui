@@ -6,7 +6,7 @@
 //! - Clearing search filters
 
 use super::helpers::log_debug;
-use crate::actions::{AppAction, apply_action};
+use crate::actions::{apply_action, AppAction};
 use crate::state::AppState;
 use crate::types::InputMode;
 use color_eyre::Result;

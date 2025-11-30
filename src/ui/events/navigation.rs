@@ -159,7 +159,9 @@ pub fn handle_response_line_down(state: Arc<RwLock<AppState>>) {
         let viewport_height = 20;
         let scroll_bottom = s.ui.response_scroll + viewport_height;
         if s.ui.response_selected_line >= scroll_bottom {
-            s.ui.response_scroll = s.ui.response_selected_line.saturating_sub(viewport_height - 1);
+            s.ui.response_scroll =
+                s.ui.response_selected_line
+                    .saturating_sub(viewport_height - 1);
         }
     }
 }

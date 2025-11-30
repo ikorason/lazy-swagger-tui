@@ -210,10 +210,13 @@ pub fn handle_token_input(
             };
 
             if !token.is_empty() {
-                apply_many(state, vec![
-                    AppAction::SetAuthToken(token),
-                    AppAction::ExitTokenInputMode,
-                ]);
+                apply_many(
+                    state,
+                    vec![
+                        AppAction::SetAuthToken(token),
+                        AppAction::ExitTokenInputMode,
+                    ],
+                );
                 log_debug("Token saved");
             } else {
                 apply(state, AppAction::ExitTokenInputMode);
@@ -258,10 +261,13 @@ pub fn handle_clear_confirmation(
 ) -> Result<()> {
     match key.code {
         KeyCode::Char('y') | KeyCode::Char('Y') => {
-            apply_many(state, vec![
-                AppAction::ClearAuthToken,
-                AppAction::ExitConfirmClearTokenMode,
-            ]);
+            apply_many(
+                state,
+                vec![
+                    AppAction::ClearAuthToken,
+                    AppAction::ExitConfirmClearTokenMode,
+                ],
+            );
             log_debug("Token cleared");
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {

@@ -5,9 +5,9 @@ use crate::ui::draw;
 use crate::{config::Config, state::AppState};
 use color_eyre::Result;
 use ratatui::{
-    DefaultTerminal, Frame,
     layout::{Constraint, Direction, Layout},
     widgets::ListState,
+    DefaultTerminal, Frame,
 };
 use std::sync::{Arc, RwLock};
 use std::time::Instant;

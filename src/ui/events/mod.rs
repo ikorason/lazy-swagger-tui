@@ -219,7 +219,8 @@ impl EventHandler {
                                 let active_tab = state_read.ui.active_detail_tab.clone();
                                 drop(state_read);
 
-                                if panel == PanelFocus::Details && active_tab == DetailTab::Request {
+                                if panel == PanelFocus::Details && active_tab == DetailTab::Request
+                                {
                                     parameters::handle_request_param_edit(
                                         self.selected_index,
                                         state.clone(),
@@ -296,7 +297,8 @@ impl EventHandler {
                                 let active_tab = state_read.ui.active_detail_tab.clone();
                                 drop(state_read);
 
-                                if panel == PanelFocus::Details && active_tab == DetailTab::Response {
+                                if panel == PanelFocus::Details && active_tab == DetailTab::Response
+                                {
                                     yank::handle_yank_response_line(state.clone());
                                 }
                             }
