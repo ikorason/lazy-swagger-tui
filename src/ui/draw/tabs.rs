@@ -6,7 +6,8 @@
 //! - Headers tab (response headers)
 //! - Response tab (response body with JSON formatting)
 
-use super::styling::get_method_color;
+use super::styling;
+use styling::get_method_color;
 use crate::state::AppState;
 use crate::types::{ApiEndpoint, ApiParameter, DetailTab, RequestEditMode};
 use ratatui::{
@@ -53,7 +54,7 @@ pub fn render_endpoint_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint
 
     let content = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(styling::default_fg()));
 
     frame.render_widget(content, area);
 }
@@ -501,9 +502,9 @@ fn build_param_line(
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(if is_path_param {
-            Color::Rgb(180, 100, 180) // Dimmed magenta
+            Color::Magenta
         } else {
-            Color::White
+            styling::default_fg()
         })
     };
 

@@ -7,10 +7,8 @@
 use super::components::{
     render_empty_message, render_error_message, render_loading_spinner, render_no_search_results,
 };
-use super::styling::get_method_color;
-use super::tabs::{
-    render_endpoint_tab, render_headers_tab, render_request_tab, render_response_tab,
-};
+use super::{styling, tabs::*};
+use styling::get_method_color;
 use crate::state::AppState;
 use crate::types::{DetailTab, LoadingState, PanelFocus, RenderItem, ViewMode};
 use ratatui::{
@@ -71,9 +69,9 @@ pub fn render_details_panel(
 
     // Determine border color based on panel focus
     let border_color = if state.ui.panel_focus == PanelFocus::Details {
-        Color::Cyan
+        styling::focused_border()
     } else {
-        Color::White
+        styling::unfocused_border()
     };
 
     // Create the main block
@@ -159,9 +157,9 @@ fn render_flat_list(frame: &mut Frame, area: Rect, state: &AppState, list_state:
 
     // Determine border color based on panel focus
     let border_color = if state.ui.panel_focus == PanelFocus::EndpointsList {
-        Color::Cyan
+        styling::focused_border()
     } else {
-        Color::White
+        styling::unfocused_border()
     };
 
     let list = List::new(items)
@@ -232,9 +230,9 @@ fn render_grouped_list(
 
     // Determine border color based on panel focus
     let border_color = if state.ui.panel_focus == PanelFocus::EndpointsList {
-        Color::Cyan
+        styling::focused_border()
     } else {
-        Color::White
+        styling::unfocused_border()
     };
 
     let list = List::new(items)
@@ -270,7 +268,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(styling::default_fg())
     };
 
     let request_style = if *active_tab == DetailTab::Request {
@@ -278,7 +276,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(styling::default_fg())
     };
 
     let headers_style = if *active_tab == DetailTab::Headers {
@@ -286,7 +284,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(styling::default_fg())
     };
 
     let response_label = if is_executing {
@@ -300,7 +298,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, state: &AppState) {
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(styling::default_fg())
     };
 
     let tabs = Line::from(vec![
