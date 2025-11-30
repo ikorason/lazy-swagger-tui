@@ -69,10 +69,7 @@ pub fn handle_request_param_edit(selected_index: usize, state: Arc<RwLock<AppSta
         // Ensure config exists
         {
             let mut s = state.write().unwrap();
-            s.request
-                .configs
-                .entry(endpoint_path.clone())
-                .or_default();
+            s.request.configs.entry(endpoint_path.clone()).or_default();
         }
 
         // Enter edit mode using action

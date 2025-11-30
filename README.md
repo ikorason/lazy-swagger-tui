@@ -20,6 +20,10 @@ A fast terminal UI for testing APIs directly from Swagger/OpenAPI specs.
 cargo install lazy-swagger-tui
 ```
 
+### From GitHub Releases
+
+Download pre-built binaries from [releases](https://github.com/ikorason/lazy-swagger-tui/releases).
+
 ### From source
 
 ```bash

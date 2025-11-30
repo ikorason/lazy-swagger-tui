@@ -69,10 +69,9 @@ pub fn handle_request_param_up(state: Arc<RwLock<AppState>>) {
     let mut s = state.write().unwrap();
 
     // Only navigate if in Viewing mode
-    if matches!(s.request.edit_mode, RequestEditMode::Viewing)
-        && s.ui.selected_param_index > 0 {
-            s.ui.selected_param_index -= 1;
-        }
+    if matches!(s.request.edit_mode, RequestEditMode::Viewing) && s.ui.selected_param_index > 0 {
+        s.ui.selected_param_index -= 1;
+    }
 }
 
 /// Navigate down in request parameters

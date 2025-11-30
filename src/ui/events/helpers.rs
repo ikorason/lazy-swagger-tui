@@ -99,9 +99,7 @@ pub fn collect_paste_batch(initial_char: char) -> (String, usize) {
     while let Ok(true) = event::poll(std::time::Duration::from_millis(0)) {
         if let Ok(Event::Key(next_key)) = event::read() {
             match next_key.code {
-                KeyCode::Char(next_c)
-                    if !next_key.modifiers.contains(KeyModifiers::CONTROL) =>
-                {
+                KeyCode::Char(next_c) if !next_key.modifiers.contains(KeyModifiers::CONTROL) => {
                     chars.push(next_c);
                 }
                 _ => {

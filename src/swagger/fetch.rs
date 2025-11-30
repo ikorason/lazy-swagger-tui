@@ -49,8 +49,7 @@ pub fn fetch_endpoints_background(state: Arc<RwLock<AppState>>, url: String) {
                     }
                     Err(e) => {
                         if let Ok(mut s) = state.write() {
-                            s.data.loading_state =
-                                LoadingState::Error(format!("Parse error: {e}"));
+                            s.data.loading_state = LoadingState::Error(format!("Parse error: {e}"));
                         }
                     }
                 }

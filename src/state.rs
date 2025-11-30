@@ -260,10 +260,7 @@ impl AppState {
 
     /// Get or create request config by endpoint path
     pub fn get_or_create_request_config_by_path(&mut self, path: &str) -> &mut RequestConfig {
-        self.request
-            .configs
-            .entry(path.to_string())
-            .or_default()
+        self.request.configs.entry(path.to_string()).or_default()
     }
 
     /// Filter endpoints based on search query

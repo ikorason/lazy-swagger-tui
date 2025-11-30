@@ -243,9 +243,7 @@ pub fn handle_token_input(
             apply(state, AppAction::AppendToTokenInput(batch_str));
 
             if char_count > 1 {
-                log_debug(&format!(
-                    "Batched {char_count} characters (paste detected)"
-                ));
+                log_debug(&format!("Batched {char_count} characters (paste detected)"));
             }
         }
         _ => {}
@@ -406,9 +404,7 @@ pub fn handle_body_input(
                     Err(e) => {
                         // Invalid JSON - show error and keep modal open
                         s.input.body_validation_error = Some(e.clone());
-                        log_debug(&format!(
-                            "JSON validation failed: {e}. Keeping modal open."
-                        ));
+                        log_debug(&format!("JSON validation failed: {e}. Keeping modal open."));
                     }
                 }
             }
@@ -432,9 +428,7 @@ pub fn handle_body_input(
             let char_count = s.input.body_editor.handle_paste_batch(c);
 
             if char_count > 1 {
-                log_debug(&format!(
-                    "Batched {char_count} characters (paste detected)"
-                ));
+                log_debug(&format!("Batched {char_count} characters (paste detected)"));
 
                 // Log content before format
                 let before_content = s.input.body_editor.content();
