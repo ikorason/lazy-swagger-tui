@@ -2,6 +2,8 @@
 
 A fast terminal UI for testing APIs directly from Swagger/OpenAPI specs.
 
+![Demo](docs/demo.gif)
+
 ## Features
 
 - 🔍 Auto-discover endpoints from Swagger/OpenAPI
@@ -14,15 +16,9 @@ A fast terminal UI for testing APIs directly from Swagger/OpenAPI specs.
 
 ## Installation
 
-### From crates.io
-
-```bash
-cargo install lazy-swagger-tui
-```
-
 ### From GitHub Releases
 
-Download pre-built binaries from [releases](https://github.com/ikorason/lazy-swagger-tui/releases).
+Download pre-built binaries for your platform from [releases](https://github.com/ikorason/lazy-swagger-tui/releases).
 
 ### From source
 
@@ -31,6 +27,8 @@ git clone https://github.com/ikorason/lazy-swagger-tui
 cd lazy-swagger-tui
 cargo install --path .
 ```
+
+This installs the binary to `~/.cargo/bin/lazy-swagger-tui`. Make sure `~/.cargo/bin` is in your `$PATH`.
 
 ## Quick Start
 
