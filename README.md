@@ -1,4 +1,4 @@
-# lazy-swagger-tui
+# Lazy Swagger Tui
 
 A fast terminal UI for testing APIs directly from Swagger/OpenAPI specs.
 
@@ -37,6 +37,7 @@ lazy-swagger-tui
 ```
 
 On first launch, configure:
+
 - **Swagger URL**: `http://localhost:5000/swagger/v1/swagger.json`
 - **Base URL**: `http://localhost:5000`
 
