@@ -14,6 +14,18 @@ pub fn fetch_endpoints_background(state: Arc<RwLock<AppState>>, url: String) {
     tokio::spawn(async move {
         match reqwest::get(&url).await {
             Ok(response) => {
+                // Check if response is successful
+                if !response.status().is_success() {
+                    if let Ok(mut s) = state.write() {
+                        s.data.loading_state = LoadingState::Error(format!(
+                            "HTTP {}: Failed to fetch swagger spec from {}",
+                            response.status(),
+                            url
+                        ));
+                    }
+                    return;
+                }
+
                 if let Ok(mut s) = state.write() {
                     s.data.loading_state = LoadingState::Parsing;
                 }
@@ -56,7 +68,16 @@ pub fn fetch_endpoints_background(state: Arc<RwLock<AppState>>, url: String) {
             }
             Err(e) => {
                 if let Ok(mut s) = state.write() {
-                    s.data.loading_state = LoadingState::Error(format!("Network error: {e}"));
+                    let error_msg = if e.is_timeout() {
+                        format!("Request timeout: {}", url)
+                    } else if e.is_connect() {
+                        format!("Connection failed: Cannot reach {}", url)
+                    } else if e.is_request() {
+                        format!("Invalid request to {}: {}", url, e)
+                    } else {
+                        format!("Network error fetching {}: {}", url, e)
+                    };
+                    s.data.loading_state = LoadingState::Error(error_msg);
                 }
             }
         }
