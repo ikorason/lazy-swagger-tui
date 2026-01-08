@@ -1,4 +1,42 @@
-use crate::types::{ApiEndpoint, SwaggerSpec};
+use crate::types::{ApiEndpoint, Components, Schema, SwaggerSpec};
+
+/// Resolves a $ref path like "#/components/schemas/User" to actual Schema
+fn resolve_schema_ref(ref_path: &str, components: &Option<Components>) -> Option<Schema> {
+    // Parse ref_path: "#/components/schemas/SomeName"
+    let schema_name = ref_path.strip_prefix("#/components/schemas/")?;
+
+    // Look up in components
+    components
+        .as_ref()?
+        .schemas
+        .as_ref()?
+        .get(schema_name)
+        .cloned()
+}
+
+/// Extracts and resolves the request body schema from an Operation
+fn extract_request_body_schema(
+    request_body: &Option<crate::types::RequestBody>,
+    components: &Option<Components>,
+) -> Option<Schema> {
+    let content = request_body.as_ref()?.content.as_ref()?;
+
+    // Try application/json first, then other JSON types
+    let media_type = content
+        .get("application/json")
+        .or_else(|| content.get("application/json-patch+json"))
+        .or_else(|| content.get("text/json"))
+        .or_else(|| content.get("application/*+json"))?;
+
+    let schema = media_type.schema.as_ref()?;
+
+    // If it's a $ref, resolve it; otherwise clone the schema
+    if let Some(ref_path) = &schema.ref_path {
+        resolve_schema_ref(ref_path, components)
+    } else {
+        Some(schema.clone())
+    }
+}
 
 pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
     let mut endpoints: Vec<ApiEndpoint> = Vec::new();
@@ -11,6 +49,10 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
                 parameters: op.parameters.clone().unwrap_or_default(),
+                request_body_schema: extract_request_body_schema(
+                    &op.request_body,
+                    &spec.components,
+                ),
             });
         }
         if let Some(op) = &path_item.post {
@@ -20,6 +62,10 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
                 parameters: op.parameters.clone().unwrap_or_default(),
+                request_body_schema: extract_request_body_schema(
+                    &op.request_body,
+                    &spec.components,
+                ),
             });
         }
         if let Some(op) = &path_item.put {
@@ -29,6 +75,10 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
                 parameters: op.parameters.clone().unwrap_or_default(),
+                request_body_schema: extract_request_body_schema(
+                    &op.request_body,
+                    &spec.components,
+                ),
             });
         }
         if let Some(op) = &path_item.delete {
@@ -38,6 +88,10 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
                 parameters: op.parameters.clone().unwrap_or_default(),
+                request_body_schema: extract_request_body_schema(
+                    &op.request_body,
+                    &spec.components,
+                ),
             });
         }
         if let Some(op) = &path_item.patch {
@@ -47,6 +101,10 @@ pub fn parse_swagger_spec(spec: SwaggerSpec) -> Vec<ApiEndpoint> {
                 summary: op.summary.clone(),
                 tags: op.tags.clone().unwrap_or_default(),
                 parameters: op.parameters.clone().unwrap_or_default(),
+                request_body_schema: extract_request_body_schema(
+                    &op.request_body,
+                    &spec.components,
+                ),
             });
         }
     }
