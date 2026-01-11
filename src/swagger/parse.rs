@@ -123,6 +123,7 @@ mod tests {
             summary: Some(summary.to_string()),
             tags: Some(tags),
             parameters: None,
+            request_body: None,
         }
     }
 
@@ -130,6 +131,7 @@ mod tests {
     fn test_parse_empty_spec() {
         let spec = SwaggerSpec {
             paths: HashMap::new(),
+            components: None,
         };
         let endpoints = parse_swagger_spec(spec);
         assert_eq!(endpoints.len(), 0);
@@ -152,7 +154,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -176,7 +178,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 5);
@@ -222,7 +224,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 3);
@@ -242,6 +244,7 @@ mod tests {
                     summary: None,
                     tags: Some(vec!["Test".to_string()]),
                     parameters: None,
+                    request_body: None,
                 }),
                 post: None,
                 put: None,
@@ -250,7 +253,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -267,6 +270,7 @@ mod tests {
                     summary: Some("Test endpoint".to_string()),
                     tags: None,
                     parameters: None,
+                    request_body: None,
                 }),
                 post: None,
                 put: None,
@@ -275,7 +279,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -300,6 +304,7 @@ mod tests {
                         schema: None,
                         description: Some("User ID".to_string()),
                     }]),
+                    request_body: None,
                 }),
                 post: None,
                 put: None,
@@ -308,7 +313,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -331,7 +336,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         // No operations defined, so no endpoints should be created
@@ -355,7 +360,7 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths };
+        let spec = SwaggerSpec { paths, components: None };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);

@@ -427,6 +427,7 @@ pub enum LoadingState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum RenderItem {
     GroupHeader {
         name: String,
