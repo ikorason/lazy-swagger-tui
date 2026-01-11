@@ -154,7 +154,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -178,7 +181,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 5);
@@ -224,7 +230,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 3);
@@ -253,7 +262,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -279,7 +291,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -313,7 +328,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
@@ -336,7 +354,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         // No operations defined, so no endpoints should be created
@@ -360,7 +381,10 @@ mod tests {
             },
         );
 
-        let spec = SwaggerSpec { paths, components: None };
+        let spec = SwaggerSpec {
+            paths,
+            components: None,
+        };
         let endpoints = parse_swagger_spec(spec);
 
         assert_eq!(endpoints.len(), 1);
