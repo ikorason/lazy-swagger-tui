@@ -90,6 +90,7 @@ pub struct ParameterSchema {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct Schema {
     // Type information
     #[serde(rename = "type")]
@@ -259,6 +260,7 @@ impl Schema {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct RequestBody {
     pub required: Option<bool>,
     pub content: Option<HashMap<String, MediaType>>,
