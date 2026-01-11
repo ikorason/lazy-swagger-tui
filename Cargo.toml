@@ -1,6 +1,6 @@
 [package]
 name = "lazy-swagger-tui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Irfan Aulizi <irfanabliz914@gmail.com>"]
 description = "A fast terminal UI for testing APIs via Swagger/OpenAPI specs"
