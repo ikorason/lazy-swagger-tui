@@ -9,6 +9,7 @@ pub struct ApiEndpoint {
     pub summary: Option<String>,
     pub tags: Vec<String>,
     pub parameters: Vec<ApiParameter>,
+    pub request_body_schema: Option<Schema>,
 }
 
 impl ApiEndpoint {
@@ -86,6 +87,191 @@ pub struct ParameterSchema {
     pub format: Option<String>, // "int32", "int64", "date-time", etc.
 
     pub default: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Schema {
+    // Type information
+    #[serde(rename = "type")]
+    pub schema_type: Option<String>, // "object", "string", "integer", "number", "boolean", "array", "null"
+
+    pub format: Option<String>, // "int32", "int64", "float", "double", "date", "date-time", "password", "byte", "binary", etc.
+
+    // Reference to another schema
+    #[serde(rename = "$ref")]
+    pub ref_path: Option<String>, // "#/components/schemas/SomeName"
+
+    // Object properties
+    pub properties: Option<HashMap<String, Schema>>, // For type: "object"
+
+    pub required: Option<Vec<String>>, // List of required property names
+
+    #[serde(rename = "additionalProperties")]
+    pub additional_properties: Option<serde_json::Value>, // Can be bool or schema
+
+    // Array properties
+    pub items: Option<Box<Schema>>, // For type: "array" - defines array element type
+
+    // Validation constraints
+    #[serde(rename = "minLength")]
+    pub min_length: Option<i64>,
+
+    #[serde(rename = "maxLength")]
+    pub max_length: Option<i64>,
+
+    pub minimum: Option<f64>,
+
+    pub maximum: Option<f64>,
+
+    pub pattern: Option<String>, // Regex pattern for strings
+
+    #[serde(rename = "enum")]
+    pub enum_values: Option<Vec<serde_json::Value>>, // Allowed values
+
+    // Nullability
+    #[serde(default)]
+    pub nullable: bool,
+
+    // Documentation
+    pub description: Option<String>,
+
+    pub title: Option<String>,
+
+    // Examples
+    pub example: Option<serde_json::Value>,
+
+    pub default: Option<serde_json::Value>,
+
+    // Composition (oneOf, anyOf, allOf)
+    #[serde(rename = "oneOf")]
+    pub one_of: Option<Vec<Schema>>,
+
+    #[serde(rename = "anyOf")]
+    pub any_of: Option<Vec<Schema>>,
+
+    #[serde(rename = "allOf")]
+    pub all_of: Option<Vec<Schema>>,
+}
+
+impl Schema {
+    /// Generate a preview JSON string for this schema
+    pub fn to_preview_string(&self) -> String {
+        self.build_preview(0)
+    }
+
+    fn build_preview(&self, indent: usize) -> String {
+        match self.schema_type.as_deref() {
+            Some("object") => self.build_object_preview(indent),
+            Some("array") => self.build_array_preview(indent),
+            Some("string") => "\"\"".to_string(),
+            Some("integer") | Some("number") => "0".to_string(),
+            Some("boolean") => "false".to_string(),
+            _ => "null".to_string(),
+        }
+    }
+
+    fn build_object_preview(&self, indent: usize) -> String {
+        let properties = match &self.properties {
+            Some(props) if !props.is_empty() => props,
+            _ => return "{}".to_string(),
+        };
+
+        let indent_str = "  ".repeat(indent + 1);
+        let close_indent = "  ".repeat(indent);
+
+        let mut lines = vec!["{".to_string()];
+
+        let prop_count = properties.len();
+        for (i, (name, prop_schema)) in properties.iter().enumerate() {
+            // Get the value (recursive for nested objects)
+            let value = prop_schema.build_preview(indent + 1);
+
+            // Check if required
+            let is_required = self
+                .required
+                .as_ref()
+                .map(|r| r.contains(name))
+                .unwrap_or(false);
+
+            // Build type hint
+            let type_hint = prop_schema.type_hint(is_required);
+
+            // Comma for all but last
+            let comma = if i < prop_count - 1 { "," } else { "" };
+
+            lines.push(format!(
+                "{}\"{}\": {}{}  // {}",
+                indent_str, name, value, comma, type_hint
+            ));
+        }
+
+        lines.push(format!("{}}}", close_indent));
+        lines.join("\n")
+    }
+
+    fn build_array_preview(&self, indent: usize) -> String {
+        match &self.items {
+            Some(item_schema) => {
+                let item = item_schema.build_preview(indent + 1);
+                format!("[{}]", item)
+            }
+            None => "[]".to_string(),
+        }
+    }
+
+    fn type_hint(&self, is_required: bool) -> String {
+        let mut hint = String::new();
+
+        // Base type - prefer format over schema_type
+        if let Some(format) = &self.format {
+            hint.push_str(format);
+        } else if let Some(t) = &self.schema_type {
+            hint.push_str(t);
+        } else {
+            hint.push_str("any");
+        }
+
+        // Required marker
+        if is_required {
+            hint.push('*');
+        }
+
+        // Nullable marker
+        if self.nullable {
+            hint.push('?');
+        }
+
+        // Constraints
+        let mut constraints = vec![];
+        if let Some(min) = self.min_length {
+            constraints.push(format!("min: {}", min));
+        }
+        if let Some(max) = self.max_length {
+            constraints.push(format!("max: {}", max));
+        }
+
+        if !constraints.is_empty() {
+            hint.push_str(&format!(" ({})", constraints.join(", ")));
+        }
+
+        hint
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequestBody {
+    pub required: Option<bool>,
+    pub content: Option<HashMap<String, MediaType>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MediaType {
+    pub schema: Option<Schema>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Components {
+    pub schemas: Option<HashMap<String, Schema>>,
 }
 
 /// Distinguishes between path and query parameters
@@ -204,6 +390,7 @@ impl ApiResponse {
 #[derive(Deserialize)]
 pub struct SwaggerSpec {
     pub paths: HashMap<String, PathItem>,
+    pub components: Option<Components>,
 }
 
 #[derive(Deserialize)]
@@ -220,6 +407,8 @@ pub struct Operation {
     pub summary: Option<String>,
     pub tags: Option<Vec<String>>,
     pub parameters: Option<Vec<ApiParameter>>,
+    #[serde(rename = "requestBody")]
+    pub request_body: Option<RequestBody>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -323,6 +512,7 @@ mod tests {
                 create_param("id", "path", true),
                 create_param("limit", "query", false),
             ],
+            request_body_schema: None,
         };
 
         let path_params = endpoint.path_params();
@@ -343,6 +533,7 @@ mod tests {
                 create_param("limit", "query", false),
                 create_param("skip", "query", false),
             ],
+            request_body_schema: None,
         };
 
         let query_params = endpoint.query_params();
@@ -359,6 +550,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
@@ -375,6 +567,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let config = RequestConfig::default(); // Empty config
@@ -390,6 +583,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
@@ -409,6 +603,7 @@ mod tests {
                 create_param("userId", "path", true),
                 create_param("postId", "path", true),
             ],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
@@ -426,6 +621,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
@@ -443,6 +639,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let config = RequestConfig::default(); // Empty config
@@ -463,6 +660,7 @@ mod tests {
                 create_param("userId", "path", true),
                 create_param("postId", "path", true),
             ],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
@@ -482,6 +680,7 @@ mod tests {
             summary: None,
             tags: vec![],
             parameters: vec![create_param("id", "path", true)],
+            request_body_schema: None,
         };
 
         let mut config = RequestConfig::default();
