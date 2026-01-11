@@ -301,11 +301,22 @@ pub fn handle_body_dialog(state: Arc<RwLock<AppState>>, selected_index: usize) {
         let s = state.read().unwrap();
         let endpoint = s.get_selected_endpoint(selected_index);
         let path = endpoint.as_ref().map(|ep| ep.path.clone());
-        let body = path
+
+        // Try to get user's existing body first
+        let existing_body = path
             .as_ref()
             .and_then(|p| s.request.configs.get(p))
-            .and_then(|c| c.body.clone())
-            .unwrap_or_else(|| "{}".to_string());
+            .and_then(|c| c.body.clone());
+
+        // If no existing body, use schema preview; fallback to "{}"
+        let body = existing_body.unwrap_or_else(|| {
+            endpoint
+                .as_ref()
+                .and_then(|ep| ep.request_body_schema.as_ref())
+                .map(|schema| schema.to_preview_string())
+                .unwrap_or_else(|| "{}".to_string())
+        });
+
         (body, path)
     };
 

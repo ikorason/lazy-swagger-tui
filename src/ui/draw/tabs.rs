@@ -221,12 +221,19 @@ pub fn render_request_tab(frame: &mut Frame, area: Rect, endpoint: &ApiEndpoint,
             // Get current body value
             let body_value = config
                 .and_then(|c| c.body.as_ref())
-                .map(|s| s.as_str())
-                .unwrap_or("{}");
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    // No user body - show schema preview if available
+                    endpoint
+                        .request_body_schema
+                        .as_ref()
+                        .map(|schema| schema.to_preview_string())
+                        .unwrap_or_else(|| "{}".to_string())
+                });
 
             // Display body (truncate if too long)
             let body_lines: Vec<&str> = body_value.lines().collect();
-            let preview_lines = if body_lines.len() > 5 {
+            let preview_lines = if body_lines.len() > 20 {
                 let mut preview = body_lines[..5].to_vec();
                 preview.push("  ... (press 'b' to edit)");
                 preview
