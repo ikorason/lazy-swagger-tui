@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-11
+
+### Added
+
+#### Request Body Schema Preview
+- **Schema-driven preview** - Automatically displays the expected request body structure based on the OpenAPI spec
+- **Type hints** - Shows field types (`string`, `int32`, `date-time`, etc.) as inline comments
+- **Required field markers** - Required fields marked with `*` (e.g., `string*`)
+- **Nullable indicators** - Optional/nullable fields marked with `?` (e.g., `int32?`)
+- **Validation constraints** - Displays constraints like `(min: 1)` for minLength
+- **Editor pre-population** - Pressing `b` to edit pre-fills the editor with the schema template
+
+Example preview for POST/PUT/PATCH endpoints:
+```json
+{
+  "name": "",  // string* (min: 1)
+  "email": "",  // string*
+  "age": 0,  // int32?
+  "active": false  // boolean
+}
+```
+
 ## [0.1.0] - 2025-11-30
 
 ### Initial Release
@@ -46,5 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON parsing and validation
 - Comprehensive test coverage (89 tests)
 
-[Unreleased]: https://github.com/ikorason/lazy-swagger-tui/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ikorason/lazy-swagger-tui/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ikorason/lazy-swagger-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ikorason/lazy-swagger-tui/releases/tag/v0.1.0
